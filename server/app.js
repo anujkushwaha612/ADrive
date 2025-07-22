@@ -2,13 +2,23 @@ import express from "express";
 import cors from "cors";
 import directoryRoutes from "./routes/directory.route.js";
 import fileRoutes from "./routes/file.routes.js";
+import userRoutes from "./routes/user.routes.js";
+import cookieParser from "cookie-parser";
+import checkAuth from "./middlewares/auth.middleware.js";
 
 const app = express();
-app.use(cors());
+app.use(cookieParser());
+app.use(
+  cors({
+    origin: "http://localhost:5173", // your frontend origin
+    credentials: true, // allow cookies to be sent
+  })
+);
 app.use(express.json());
 
-app.use("/directory", directoryRoutes);
-app.use("/file", fileRoutes);
+app.use("/directory",checkAuth, directoryRoutes);
+app.use("/file",checkAuth, fileRoutes);
+app.use("/user", userRoutes);
 
 app.use((err, req, res, next) => {
   res.status(err.status || 500).json({

@@ -4,24 +4,32 @@ import { rename, rm, writeFile } from "fs/promises";
 import path from "path";
 import filesData from '../filesDB.json' with {type: "json"} ;
 import foldersData from '../foldersDB.json' with {type: "json"} ;
+import validateIDMiddleware from "../middlewares/validateID.middleware.js";
 const router = express.Router();
+
+router.param("parentDirId", validateIDMiddleware);
+router.param("id", validateIDMiddleware);
 
 router.get("/:id", (req, res) => {
   //   const filename = path.join("/", req.params[0]);
   const { id } = req.params;
-  const fileData = filesData.find((file) => file.id === id);
+  const user = req.user;
+  const fileData = filesData.find(
+    (file) => file.id === id && file.userId === user.id
+  );
   if (!fileData) {
     return res.status(404).json({
-      message : "No such file exist",
+      message: "No such file exist",
     });
   }
-
+  const filePath = `${process.cwd()}/storage/${id}${fileData.extension}`;
   if (req.query.action === "download") {
-    res.set("content-disposition", `attachment; filename=${fileData.name}`);
+    // res.set("content-disposition", `attachment; filename=${fileData.name}`);
+    return res.download(filePath, fileData.name);
   }
   // const readStream = createReadStream(`${import.meta.dirname}/storage/${filename}`);
   // readStream.pipe(res)
-  return res.status(200).sendFile(`${process.cwd()}/storage/${id}${fileData.extension}`, (err) => {
+  return res.status(200).sendFile(filePath, (err) => {
     if (!res.headersSent && err) {
       return res.json({
         error: "File not Found",
@@ -32,8 +40,9 @@ router.get("/:id", (req, res) => {
 
 router.post("/:parentDirId?", async (req, res) => {
   try {
-    const parentDirId = req.params.parentDirId || foldersData[0].id;
-    const filename = req.headers.filename || "untitled"
+    const user = req.user;
+    const parentDirId = req.params.parentDirId || user.rootDirId;
+    const filename = req.headers.filename || "untitled";
     const extension = path.extname(filename);
     const id = crypto.randomUUID();
 
@@ -44,12 +53,13 @@ router.post("/:parentDirId?", async (req, res) => {
       writeStream.end();
       filesData.push({
         id,
+        userId: user.id,
         extension,
         name: filename,
         parentDirId,
       });
       const parentDirData = foldersData.find(
-        (folder) => folder.id === parentDirId
+        (folder) => folder.id === parentDirId && folder.userId === user.id
       );
       parentDirData.files.push(id);
       await writeFile("./foldersDB.json", JSON.stringify(foldersData));
@@ -66,21 +76,24 @@ router.post("/:parentDirId?", async (req, res) => {
   //   const filename = path.join("/", req.params[0]);
 });
 
-router.patch("/:id", async (req, res,next) => {
+router.patch("/:id", async (req, res, next) => {
   try {
     // const filename = path.join("/", req.params[0]);
     const { id } = req.params;
-    const fileData = filesData.find((file) => file.id === id);
+    const user = req.user;
+    const fileData = filesData.find(
+      (file) => file.id === id && file.userId === user.id
+    );
     if (!fileData) {
-    return res.status(404).json({
-      message : "No such file exist",
-    });
-  }
+      return res.status(404).json({
+        message: "No such file exist",
+      });
+    }
     const { newFilename } = req.body;
-    if(!newFilename){
+    if (!newFilename) {
       return res.status(400).json({
-        message : "valid filename is reqired"
-      })
+        message: "valid filename is reqired",
+      });
     }
     // await rename(`./storage/${filename}`, `./storage/${newFilename}`);
     fileData.name = newFilename;
@@ -90,7 +103,7 @@ router.patch("/:id", async (req, res,next) => {
     });
   } catch (error) {
     error.status = 500;
-    error.message = "Failed to rename the file"
+    error.message = "Failed to rename the file";
     next(error);
   }
 });
@@ -101,20 +114,30 @@ router.delete("/:id", async (req, res) => {
     // const filePath = `${import.meta.dirname}/storage/${filename}`;
     // console.log(filePath)
     const { id } = req.params;
-    const fileIndex = filesData.findIndex((file) => file.id === id);
-    if(fileIndex === -1){
+    const user = req.user;
+    const fileIndex = filesData.findIndex(
+      (file) => file.id === id && file.userId === user.id
+    );
+    if (fileIndex === -1) {
       return rename.status(404).json({
-        message : "File not found"
-      })
+        message: "File not found",
+      });
     }
     const fileData = filesData[fileIndex];
     const filePath = `./storage/${id}${fileData.extension}`;
     const parentDirData = foldersData.find(
-      (folder) => folder.id === fileData.parentDirId
+      (folder) =>
+        folder.id === fileData.parentDirId && folder.userId === user.id
     );
 
+    if (!parentDirData) {
+      return res.status(401).json({
+        message: "Unauthorised access",
+      });
+    }
+
     parentDirData.files = parentDirData.files.filter((fileId) => fileId !== id);
-    await rm(filePath, { recursive: true });
+    await rm(filePath);
     filesData.splice(fileIndex, 1);
     await writeFile("./filesDB.json", JSON.stringify(filesData));
     await writeFile("./foldersDB.json", JSON.stringify(foldersData));
@@ -123,8 +146,8 @@ router.delete("/:id", async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      message : "Failed to delete the file"
-    })
+      message: "Failed to delete the file",
+    });
   }
 });
 
