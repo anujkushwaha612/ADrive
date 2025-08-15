@@ -1,7 +1,4 @@
 import express from "express";
-import { writeFile } from "fs/promises";
-import foldersData from '../foldersDB.json' with {type: "json"} ;
-import usersData from '../usersDB.json' with {type: "json"} ;
 import checkAuth from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
@@ -9,8 +6,8 @@ const router = express.Router();
 router.post("/register", async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
-
-    const foundUser = usersData.find((user) => user.email === email);
+    const db = req.db;
+    const foundUser = await db.collection("users").findOne({ email });
     if (foundUser) {
       return res.status(409).json({
         error: "User already exist",
@@ -19,25 +16,45 @@ router.post("/register", async (req, res, next) => {
       });
     }
 
-    const userId = crypto.randomUUID();
-    const dirId = crypto.randomUUID();
-    foldersData.push({
-      id: dirId,
+    // const userId = crypto.randomUUID();
+    // const dirId = crypto.randomUUID();
+    // foldersData.push({
+    //   id: dirId,
+    //   name: `root-${email}`,
+    //   userId,
+    //   parentDirId: null,
+    //   files: [],
+    //   directories: [],
+    // });
+    // usersData.push({
+    //   id: userId,
+    //   name,
+    //   email,
+    //   password,
+    //   rootDirId: dirId,
+    // });
+    // await writeFile("./foldersDB.json", JSON.stringify(foldersData));
+    // await writeFile("./usersDB.json", JSON.stringify(usersData));
+
+    const dirCollection = db.collection("directories");
+
+    const userRootDir = await dirCollection.insertOne({
       name: `root-${email}`,
-      userId,
       parentDirId: null,
-      files: [],
-      directories: [],
     });
-    usersData.push({
-      id: userId,
+
+    const rootDirId = userRootDir.insertedId;
+
+    const createdUser = await db.collection("users").insertOne({
       name,
       email,
       password,
-      rootDirId: dirId,
+      rootDirId,
     });
-    await writeFile("./foldersDB.json", JSON.stringify(foldersData));
-    await writeFile("./usersDB.json", JSON.stringify(usersData));
+
+    const userId = createdUser.insertedId;
+
+    await dirCollection.updateOne({ _id: rootDirId }, { $set: { userId } });
     return res.status(201).json({
       success: true,
       message: "User created successfully. Login to continue",
@@ -49,14 +66,15 @@ router.post("/register", async (req, res, next) => {
 
 router.post("/login", async (req, res, next) => {
   const { email, password } = req.body;
-  const user = usersData.find((user) => user.email === email);
-  if (!user || user.password !== password) {
+  const db = req.db;
+  const user = await db.collection("users").findOne({ email, password });
+  if (!user) {
     return res.status(404).json({
       message: "Invalid credentials",
     });
   }
-
-  res.cookie("uid", user.id, {
+  //! user object Id if we try to print it will come as a buffer
+  res.cookie("uid", user._id.toString(), {
     httpOnly: true,
     maxAge: 1000 * 60 * 60 * 24 * 7,
   });
@@ -67,18 +85,18 @@ router.post("/login", async (req, res, next) => {
   });
 });
 
-router.get("/" , checkAuth , (req,res) => {
+router.get("/", checkAuth, (req, res) => {
   return res.status(200).json({
-    name : req.user.name,
-    email : req.user.email
-  })
-})
-router.post("/logout" , checkAuth , (req,res) => {
+    name: req.user.name,
+    email: req.user.email,
+  });
+});
+router.post("/logout", checkAuth, (req, res) => {
   // res.cookie("uid" , "" , {
   //   maxAge : 0
   // });
-  res.clearCookie("uid")
-  return res.status(204).end()
-})
+  res.clearCookie("uid");
+  return res.status(204).end();
+});
 
 export default router;

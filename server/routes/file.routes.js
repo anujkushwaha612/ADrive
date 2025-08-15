@@ -12,6 +12,7 @@ router.param("id", validateIDMiddleware);
 
 router.get("/:id", (req, res) => {
   //   const filename = path.join("/", req.params[0]);
+  const db = req.db;
   const { id } = req.params;
   const user = req.user;
   const fileData = filesData.find(

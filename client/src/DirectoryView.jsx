@@ -468,6 +468,8 @@ const DirectoryView = () => {
         credentials: "include",
       });
 
+      console.log(response)
+
       await response.json();
       setRenamingFile(null);
       setNewFilename("");
