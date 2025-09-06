@@ -2,9 +2,6 @@ import { ObjectId } from "mongodb";
 
 export default async function checkAuth(req, res, next) {
   const { uid } = req.cookies;
-  if (req.method == "PATCH") {
-    console.log(uid);
-  }
   const db = req.db;
   if (!uid) {
     return res.status(401).json({ error: "Not logged!" });

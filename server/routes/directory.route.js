@@ -1,7 +1,7 @@
 import express from "express";
 import { rm, writeFile } from "fs/promises";
-import foldersData from '../foldersDB.json' with {type: "json"} ;
-import filesData from '../filesDB.json' with {type: "json"} ;
+// import foldersData from '../foldersDB.json' with {type: "json"} ;
+// import filesData from '../filesDB.json' with {type: "json"} ;
 import validateIDMiddleware from "../middlewares/validateID.middleware.js";
 import { Db, ObjectId } from "mongodb";
 
@@ -25,8 +25,8 @@ const router = express.Router();
 //* Relative paths in Node (./storage/...) are almost always resolved relative to the working directory (process.cwd()), not the file containing the code.
 //* When you start your app (probably with node app.js in project-root), the default working directory is the root of your project, regardless of where directory.routes.js lives.
 
-// router.param("parentDirId", validateIDMiddleware);
-// router.param("id", validateIDMiddleware);
+router.param("parentDirId", validateIDMiddleware);
+router.param("id", validateIDMiddleware);
 
 router.get("/:id?", async (req, res, next) => {
   //   try {
@@ -47,12 +47,12 @@ router.get("/:id?", async (req, res, next) => {
   try {
     const user = req.user;
     const db = req.db;
-    const id = req.params.id || user.rootDirId;
+    const _id = req.params.id ? new ObjectId(req.params.id) : user.rootDirId;
     const dirCollection = db.collection("directories");
 
     // const folderData = foldersData.find((folder) => folder.userId === user.id && folder.id === id)
     const directoryData = await dirCollection.findOne({
-      _id: new ObjectId(id),
+      _id,
     });
     if (!directoryData) {
       return res.status(403).json({
@@ -67,17 +67,22 @@ router.get("/:id?", async (req, res, next) => {
     //     foldersData.find((folder) => folder.id === directoryId)
     //   )
     //   .map(({ id, name }) => ({ id, name }));
-    const files = [];
-    const directories = await dirCollection
-      .find({ parentDirId: new Object(id) })
+    const files = await db
+      .collection("files")
+      .find({
+        parentDirId: directoryData._id,
+      })
       .toArray();
-    return res
-      .status(200)
-      .json({
-        ...directoryData,
-        files,
-        directories: directories.map((dir) => ({ ...dir, id: dir._id })),
-      });
+
+    const directories = await dirCollection
+      .find({ parentDirId: _id })
+      .toArray();
+
+    return res.status(200).json({
+      ...directoryData,
+      files: files.map((file) => ({ ...file, id: file._id })),
+      directories: directories.map((dir) => ({ ...dir, id: dir._id })),
+    });
   } catch (error) {
     error.message = "Failed to get the directory";
     next(error);
@@ -94,7 +99,9 @@ router.post("/:parentDirId?", async (req, res, next) => {
     // });
     const user = req.user;
     const db = req.db;
-    const parentDirId = req.params.parentDirId || user.rootDirId;
+    const parentDirId = req.params.parentDirId
+      ? new ObjectId(req.params.parentDirId)
+      : user.rootDirId;
 
     const { dirname } = req.body || "New Folder";
     const dirCollection = db.collection("directories");
@@ -157,6 +164,7 @@ router.patch("/:id", async (req, res, next) => {
   const user = req.user;
   const { id } = req.params;
   const { newDirName } = req.body;
+  console.log(newDirName);
   const db = req.db;
   const dirCollection = db.collection("directories");
   try {
@@ -173,64 +181,121 @@ router.patch("/:id", async (req, res, next) => {
   }
 });
 
+// async function deleteDirectory(dirId, user) {
+//   const directoryIndex = foldersData.findIndex(
+//     (dir) => dir.id === dirId && dir.userId === user.id
+//   );
+//   if (directoryIndex === -1) return;
+//   const directoryData = foldersData[directoryIndex];
+//   foldersData.splice(directoryIndex, 1);
+//   try {
+//     for (const fileId of directoryData.files) {
+//       const fileIndex = filesData.findIndex(
+//         (file) => file.id === fileId && file.userId === user.id
+//       );
+//       const { extension } = filesData[fileIndex];
+//       await rm(`./storage/${fileId}${extension}`);
+//       filesData.splice(fileIndex, 1);
+//     }
 
-async function deleteDirectory(dirId, user) {
-  const directoryIndex = foldersData.findIndex(
-    (dir) => dir.id === dirId && dir.userId === user.id
-  );
-  if (directoryIndex === -1) return;
-  const directoryData = foldersData[directoryIndex];
-  foldersData.splice(directoryIndex, 1);
+//     for (const dirId of directoryData.directories) {
+//       await deleteDirectory(dirId, user);
+//     }
+
+//     await writeFile("./filesDB.json", JSON.stringify(filesData));
+//     await writeFile("./foldersDB.json", JSON.stringify(foldersData));
+//   } catch (error) {
+//     console.log("deleteDirectory error :- ", error);
+//   }
+// }
+
+// router.delete("/:id", async (req, res) => {
+//   const { id } = req.params;
+//   const user = req.user;
+//   if (id === req.user.rootDirId) {
+//     return res.status(400).json({ error: "Cannot delete root directory" });
+//   }
+//   try {
+//     const directoryData = foldersData.find(
+//       (dir) => dir.id === id && dir.userId === req.user.id
+//     );
+//     if (!directoryData) {
+//       return res.status(403).json({
+//         message: "Unauthorised Acccess",
+//       });
+//     }
+//     const parentDirData = foldersData.find(
+//       (dir) =>
+//         dir.id === directoryData.parentDirId && dir.userId === req.user.id
+//     );
+//     parentDirData.directories = parentDirData.directories.filter(
+//       (dirId) => dirId !== id
+//     );
+//     await deleteDirectory(id, user);
+//     return res.status(200).json({ message: "Folder deleted successfully!" });
+//   } catch (error) {
+// return res.status(500).json({
+//   message: "Failed to delete the directory",
+// });
+//   }
+// });
+
+router.delete("/:id", async (req, res, next) => {
   try {
-    for (const fileId of directoryData.files) {
-      const fileIndex = filesData.findIndex(
-        (file) => file.id === fileId && file.userId === user.id
-      );
-      const { extension } = filesData[fileIndex];
-      await rm(`./storage/${fileId}${extension}`);
-      filesData.splice(fileIndex, 1);
+    const { id } = req.params;
+    const db = req.db;
+
+    // 1. Find directory
+    const parentDirectoryData = await db.collection("directories").findOne({ _id: new ObjectId(id) });
+    if (!parentDirectoryData) {
+      return res.status(404).json({ message: "Directory not found" });
     }
 
-    for (const dirId of directoryData.directories) {
-      await deleteDirectory(dirId, user);
-    }
+    // 2. Get all files in directory
+    const files = await db.collection("files").find({
+      parentDirId: parentDirectoryData._id,
+    }).toArray();
 
-    await writeFile("./filesDB.json", JSON.stringify(filesData));
-    await writeFile("./foldersDB.json", JSON.stringify(foldersData));
+    // 3. Get all subdirectories (one level deep)
+    const directories = await db.collection("directories").find({
+      parentDirId: parentDirectoryData._id,
+    }).toArray();
+
+    // 4. Delete files from storage + DB
+    await Promise.all(
+      files.map(async (file) => {
+        const fileId = file._id?.toString();
+        const filePath = `./storage/${fileId}${file.extension}`;
+        try {
+          await rm(filePath);
+        } catch (err) {
+          console.error(`Failed to delete file: ${filePath}`, err);
+        }
+        await db.collection("files").deleteOne({ _id: file._id });
+      })
+    );
+
+    // 5. Delete subdirectories
+    await Promise.all(
+      directories.map(async (directory) => {
+        await db.collection("directories").deleteOne({ _id: directory._id });
+      })
+    );
+
+    // 6. Delete parent directory
+    await db.collection("directories").deleteOne({ _id: parentDirectoryData._id });
+
+    return res.status(200).json({
+      message: "Directory deleted successfully",
+    });
+
   } catch (error) {
-    console.log("deleteDirectory error :- ", error);
-  }
-}
-
-router.delete("/:id", async (req, res) => {
-  const { id } = req.params;
-  const user = req.user;
-  if (id === req.user.rootDirId) {
-    return res.status(400).json({ error: "Cannot delete root directory" });
-  }
-  try {
-    const directoryData = foldersData.find(
-      (dir) => dir.id === id && dir.userId === req.user.id
-    );
-    if (!directoryData) {
-      return res.status(403).json({
-        message: "Unauthorised Acccess",
-      });
-    }
-    const parentDirData = foldersData.find(
-      (dir) =>
-        dir.id === directoryData.parentDirId && dir.userId === req.user.id
-    );
-    parentDirData.directories = parentDirData.directories.filter(
-      (dirId) => dirId !== id
-    );
-    await deleteDirectory(id, user);
-    return res.status(200).json({ message: "Folder deleted successfully!" });
-  } catch (error) {
+    console.error(error);
     return res.status(500).json({
       message: "Failed to delete the directory",
     });
   }
 });
+
 
 export default router;

@@ -430,7 +430,7 @@ const DirectoryView = () => {
         method: "DELETE",
         credentials: "include",
       });
-      await response.text();
+      await response.json();
       getDirectoryItems();
     } catch (error) {
       console.error("Error deleting file:", error);
@@ -468,7 +468,7 @@ const DirectoryView = () => {
         credentials: "include",
       });
 
-      console.log(response)
+      console.log(response);
 
       await response.json();
       setRenamingFile(null);
@@ -481,17 +481,20 @@ const DirectoryView = () => {
 
   async function saveDirectory(directoryId) {
     try {
+      console.log("Renaming to:", newFilename);
       const response = await fetch(`${BASE_URL}/directory/${directoryId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          newDirname: newFilename,
+          newDirName: newFilename,
         }),
+        credentials: "include",
       });
 
-      await response.text();
+      const data = await response.json();
+      console.log(data);
       setRenamingFile(null);
       setNewFilename("");
       getDirectoryItems();
@@ -575,7 +578,6 @@ const DirectoryView = () => {
         type="file"
         onChange={uploadFile}
         className="hidden"
-        multiple
       />
 
       {/* Content Area */}
@@ -615,7 +617,10 @@ const DirectoryView = () => {
                       isRenaming={renamingFile === directory.name}
                       newName={newFilename}
                       setNewName={setNewFilename}
-                      onRename={() => renameFile(directory.name)}
+                      onRename={() => {
+                        setRenamingFile(directory.name);
+                        setNewFilename(directory.name);
+                      }}
                       onSave={() => saveDirectory(directory.id)}
                       onDelete={() => handleDirectoryDelete(directory.id)}
                       onCancelRename={cancelRename}
