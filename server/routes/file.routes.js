@@ -1,9 +1,7 @@
 import express from "express";
-import { createReadStream, createWriteStream } from "fs";
-import { rename, rm, writeFile } from "fs/promises";
+import { createWriteStream } from "fs";
+import { rm } from "fs/promises";
 import path from "path";
-// import filesData from '../filesDB.json' with {type: "json"} ;
-// import foldersData from '../foldersDB.json' with {type: "json"} ;
 import validateIDMiddleware from "../middlewares/validateID.middleware.js";
 import { ObjectId } from "mongodb";
 const router = express.Router();
@@ -27,7 +25,14 @@ router.get("/:id", async (req, res) => {
 
   const fileData = await db.collection("files").findOne({
     _id: new ObjectId(id),
+    userId: user._id,
   });
+
+  if (!fileData) {
+    return res.status(404).json({
+      message: "File not found",
+    });
+  }
 
   const filePath = `${process.cwd()}/storage/${id}${fileData.extension}`;
   if (req.query.action === "download") {
@@ -93,6 +98,7 @@ router.post("/:parentDirId?", async (req, res) => {
       extension,
       name: filename,
       parentDirId: parentDirData._id,
+      userId: user._id,
     });
 
     const fileId = insertedFile.insertedId.toString();
@@ -147,7 +153,10 @@ router.patch("/:id", async (req, res, next) => {
 
     await db
       .collection("files")
-      .updateOne({ _id: new ObjectId(id) }, { $set: { name: newFilename } });
+      .updateOne(
+        { _id: new ObjectId(id), userId: user._id },
+        { $set: { name: newFilename } }
+      );
     return res.status(200).json({
       message: "File renamed successfully",
     });

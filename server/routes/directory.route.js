@@ -1,9 +1,7 @@
 import express from "express";
-import { rm, writeFile } from "fs/promises";
-// import foldersData from '../foldersDB.json' with {type: "json"} ;
-// import filesData from '../filesDB.json' with {type: "json"} ;
+import { rm } from "fs/promises";
 import validateIDMiddleware from "../middlewares/validateID.middleware.js";
-import { Db, ObjectId } from "mongodb";
+import { ObjectId } from "mongodb";
 
 const router = express.Router();
 
