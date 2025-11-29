@@ -62,6 +62,7 @@ const Login = () => {
         body: JSON.stringify(data),
         credentials : "include"
       });
+      console.log(res)
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.message || "Failed to login user please try again");
       if (resData.success) {

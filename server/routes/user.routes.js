@@ -1,9 +1,12 @@
 import express from "express";
 import checkAuth from "../middlewares/auth.middleware.js";
+import { ObjectId } from "mongodb";
+import { client } from "../config/db.js";
 
 const router = express.Router();
 
 router.post("/register", async (req, res, next) => {
+  const session = client.startSession();
   try {
     const { name, email, password } = req.body;
     const db = req.db;
@@ -37,29 +40,47 @@ router.post("/register", async (req, res, next) => {
     // await writeFile("./usersDB.json", JSON.stringify(usersData));
 
     const dirCollection = db.collection("directories");
+    const userId = new ObjectId();
+    const rootDirId = new ObjectId();
 
-    const userRootDir = await dirCollection.insertOne({
-      name: `root-${email}`,
-      parentDirId: null,
-    });
+    //! Start Transaction
+    session.startTransaction();
+    await dirCollection.insertOne(
+      {
+        _id: rootDirId,
+        name: `root-${email}`,
+        parentDirId: null,
+        userId,
+      },
+      { session }
+    );
 
-    const rootDirId = userRootDir.insertedId;
+    await db.collection("users").insertOne(
+      {
+        _id: userId,
+        name,
+        email,
+        password,
+        rootDirId,
+      },
+      { session }
+    );
 
-    const createdUser = await db.collection("users").insertOne({
-      name,
-      email,
-      password,
-      rootDirId,
-    });
-
-    const userId = createdUser.insertedId;
-
-    await dirCollection.updateOne({ _id: rootDirId }, { $set: { userId } });
+    session.commitTransaction();
     return res.status(201).json({
       success: true,
       message: "User created successfully. Login to continue",
     });
   } catch (error) {
+    session.abortTransaction();
+    // if (error.code === 121) {
+    //   res.status(400).json({
+    //     error: "Invalid Fields",
+    //     details: error,
+    //   });
+    // } else {
+    //   next(error);
+    // }
     next(error);
   }
 });
@@ -91,6 +112,7 @@ router.get("/", checkAuth, (req, res) => {
     email: req.user.email,
   });
 });
+
 router.post("/logout", checkAuth, (req, res) => {
   // res.cookie("uid" , "" , {
   //   maxAge : 0

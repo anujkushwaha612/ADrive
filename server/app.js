@@ -5,7 +5,7 @@ import fileRoutes from "./routes/file.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import cookieParser from "cookie-parser";
 import checkAuth from "./middlewares/auth.middleware.js";
-import { connectDB } from "./db.js";
+import { connectDB } from "./config/db.js";
 
 try {
   const db = await connectDB();
