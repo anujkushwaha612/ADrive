@@ -122,3 +122,5 @@ router.post("/logout", checkAuth, (req, res) => {
 });
 
 export default router;
+
+
