@@ -1,35 +1,45 @@
-import { connectDB, client } from "./db.js";
+import mongoose from "mongoose";
+import { connectDB } from "./db.js";
 
-const db = await connectDB();
+
+await connectDB();
+const client = mongoose.connection.getClient();
 
 try {
+  const db = mongoose.connection.db;
   await db.command({
     collMod: "users",
     validator: {
       $jsonSchema: {
-        bsonType: "object",
-        required: ["_id", "name", "email", "password", "rootDirId"],
+        bsonType: 'object',
+        required: [
+          '_id',
+          'name',
+          'email',
+          'password',
+          'rootDirId'
+        ],
         properties: {
           _id: {
-            bsonType: "objectId",
+            bsonType: 'objectId'
           },
           name: {
-            bsonType: "string",
-            minLength: 3,
+            bsonType: 'string',
+            minLength: 3
           },
           email: {
-            bsonType: "string",
-            pattern: "/^[a-zA-Z0-9._%+-]+@gmail\.com$/i",
+            bsonType: 'string',
+            pattern: '^[a-zA-Z0-9._%+-]+@gmail.com$'
           },
           password: {
-            bsonType: "string",
+            bsonType: 'string'
           },
           rootDirId: {
-            bsonType: "objectId",
-          },
+            bsonType: 'objectId'
+          }
         },
-        additionalProperties: false,
-      },
+        additionalProperties: false
+      }
     },
     validationAction: "error",
     validationLevel: "strict",

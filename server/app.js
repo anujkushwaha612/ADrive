@@ -6,11 +6,12 @@ import userRoutes from "./routes/user.routes.js";
 import cookieParser from "cookie-parser";
 import checkAuth from "./middlewares/auth.middleware.js";
 import { connectDB } from "./config/db.js";
+const mySecretKey = "anuj-StorageApp-secretKey"
 
 await connectDB();
 
 const app = express();
-app.use(cookieParser());
+app.use(cookieParser(mySecretKey));
 app.use(
   cors({
     origin: "http://localhost:5173", // your frontend origin

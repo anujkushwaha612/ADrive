@@ -10,6 +10,7 @@ const UserSchema = new Schema({
     email :{
         type: String,
         required: true,
+        unique: true,
         validate: {
             validator: function (v) {
                 return /^[a-zA-Z0-9._%+-]+@gmail.com$/i.test(v);

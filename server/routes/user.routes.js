@@ -16,7 +16,7 @@ router.get("/", checkAuth, (req, res) => {
 });
 
 router.post("/logout", checkAuth, (req, res) => {
-  res.clearCookie("uid");
+  res.clearCookie("token");
   return res.status(204).end();
 });
 
