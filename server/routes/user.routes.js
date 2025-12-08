@@ -1,6 +1,11 @@
 import express from "express";
 import checkAuth from "../middlewares/auth.middleware.js";
-import { loginUser, registerUser } from "../controllers/user.controller.js";
+import {
+  loginUser,
+  logoutAllDevices,
+  registerUser,
+} from "../controllers/user.controller.js";
+import Session from "../models/session.model.js";
 
 const router = express.Router();
 
@@ -15,11 +20,13 @@ router.get("/", checkAuth, (req, res) => {
   });
 });
 
-router.post("/logout", checkAuth, (req, res) => {
-  res.clearCookie("token");
+router.post("/logout", checkAuth, async (req, res) => {
+  const { sessionId } = req.signedCookies;
+  await Session.findByIdAndDelete(sessionId);
+  res.clearCookie("sessionId");
   return res.status(204).end();
 });
 
+router.post("/logout-all", checkAuth, logoutAllDevices);
+
 export default router;
-
-

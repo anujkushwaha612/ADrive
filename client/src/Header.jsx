@@ -47,6 +47,17 @@ const Header = () => {
     setDropdownOpen(false);
   };
 
+  const handleLogoutFromAllDevices = async () => {
+    const response = await fetch("http://localhost:4000/user/logout-all", {
+      method: "POST",
+      credentials: "include"
+    })
+    if (response.ok) {
+      navigate("/login");
+    }
+    setDropdownOpen(false);
+  }
+
   // This is a placeholder for when the user data is loading
   const renderLoadingSkeleton = () => (
     <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-300 animate-pulse" />
@@ -131,6 +142,12 @@ const Header = () => {
                     className="w-full text-left px-4 py-2 text-sm cursor-pointer text-gray-700 hover:bg-red-50 hover:text-red-600"
                   >
                     Logout
+                  </button>
+                  <button
+                    onClick={handleLogoutFromAllDevices}
+                    className="w-full text-left px-4 py-2 text-sm cursor-pointer text-gray-700 hover:bg-red-50 hover:text-red-600"
+                  >
+                    Logout from all devices
                   </button>
                 </div>
               </div>
