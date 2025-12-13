@@ -10,11 +10,13 @@ import {
   Cloud,
 } from "lucide-react";
 import { useNavigate, Link } from "react-router-dom";
+import { useEffect } from "react";
 
 const Register = () => {
   const [data, setData] = useState({
     name: "",
     email: "",
+    otp: "",
     password: "",
   });
 
@@ -22,6 +24,20 @@ const Register = () => {
   const [message, setMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
+  const [timer, setTimer] = useState(0);
+  const [isOtpSent, setIsOtpSent] = useState(false); // To switch text from "Send" to "Resend"
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let intervalId;
+    if (timer > 0) {
+      intervalId = setInterval(() => {
+        setTimer((prevTimer) => prevTimer - 1);
+      }, 1000);
+    }
+    // Cleanup interval on component unmount or when timer stops
+    return () => clearInterval(intervalId);
+  }, [timer]);
 
   const navigate = useNavigate();
 
@@ -31,11 +47,46 @@ const Register = () => {
     if (!data.email) newErrors.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(data.email))
       newErrors.email = "Invalid email address";
+    if (!data.otp) newErrors.otp = "OTP is required";
     if (!data.password) newErrors.password = "Password is required";
     else if (data.password.length < 6)
       newErrors.password = "Password must be at least 6 characters";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+
+    if (!data.email) {
+      setErrors((prev) => ({ ...prev, email: "Email is required" }));
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await fetch("http://localhost:4000/user/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: data.email,
+        }),
+      });
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.message || "OTP sending failed");
+      if (resData.success) {
+        setMessage({
+          type: "success",
+          text: resData.message || "OTP sent successfully!",
+        });
+      }
+      setTimer(60);
+      setIsOtpSent(true);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (e) => {
@@ -64,7 +115,7 @@ const Register = () => {
           type: "success",
           text: resData.message || "Registration successful!",
         });
-        setTimeout(() => navigate("/login"), 1000);
+        setTimeout(() => navigate("/login"), 300);
       }
     } catch (err) {
       setMessage({
@@ -78,7 +129,7 @@ const Register = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden ">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-100 rounded-full opacity-50"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-100 rounded-full opacity-50"></div>
       </div>
@@ -171,6 +222,56 @@ const Register = () => {
                 <p className="flex items-center text-sm text-red-600">
                   <AlertCircle className="w-4 h-4 mr-1" />
                   {errors.email}
+                </p>
+              )}
+            </div>
+
+            {/* Otp field */}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                OTP
+              </label>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  name="otp"
+                  value={data.otp}
+                  onChange={handleChange}
+                  placeholder="Enter your otp"
+                  className={`w-[70%] pl-4 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                    errors.otp
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={handleSendOtp}
+                  // Disable if timer is running OR API is loading
+                  disabled={timer > 0 || loading}
+                  className={`
+          px-2 py-1 rounded-xl border border-gray-200 
+          transition-colors duration-200
+          ${
+            timer > 0 || loading
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed" // Disabled styles
+              : "bg-gray-100 text-gray-600 hover:text-gray-800 cursor-pointer" // Active styles
+          }
+        `}
+                >
+                  {loading
+                    ? "Sending..."
+                    : timer > 0
+                    ? `Resend in ${timer}s`
+                    : isOtpSent
+                    ? "Resend OTP"
+                    : "Send OTP"}
+                </button>
+              </div>
+              {errors.otp && (
+                <p className="flex items-center space-x-1 text-sm text-red-600">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{errors.otp}</span>
                 </p>
               )}
             </div>

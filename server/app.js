@@ -6,7 +6,10 @@ import userRoutes from "./routes/user.routes.js";
 import cookieParser from "cookie-parser";
 import checkAuth from "./middlewares/auth.middleware.js";
 import { connectDB } from "./config/db.js";
-const mySecretKey = "anuj-StorageApp-secretKey"
+import { configDotenv } from "dotenv";
+configDotenv();
+
+const mySecretKey = process.env.COOKIE_SECRET_KEY;
 
 await connectDB();
 

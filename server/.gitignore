@@ -5,3 +5,4 @@ trash
 foldersDB.json
 filesDB.json
 usersDB.json
+.env

@@ -4,6 +4,7 @@ import {
   loginUser,
   logoutAllDevices,
   registerUser,
+  sendOtp,
 } from "../controllers/user.controller.js";
 import Session from "../models/session.model.js";
 
@@ -12,6 +13,8 @@ const router = express.Router();
 router.post("/register", registerUser);
 
 router.post("/login", loginUser);
+router.post("/send-otp", sendOtp);
+
 
 router.get("/", checkAuth, (req, res) => {
   return res.status(200).json({
