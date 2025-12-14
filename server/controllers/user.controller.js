@@ -2,18 +2,19 @@ import mongoose from "mongoose";
 import Directory from "../models/directory.model.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcrypt";
-import crypto from 'crypto';
+import crypto from "crypto";
 import Session from "../models/session.model.js";
 import Otp from "../models/otp.model.js";
 import nodemailer from "nodemailer";
+import redisClient from "../redis.js";
 
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    auth: {
-        user: process.env.NODEMAILER_USER,
-        pass: process.env.NODEMAILER_PASSWORD // Paste the 16-char App Password here
-    }
+  host: "smtp.gmail.com",
+  port: 587,
+  auth: {
+    user: process.env.NODEMAILER_USER,
+    pass: process.env.NODEMAILER_PASSWORD, // Paste the 16-char App Password here
+  },
 });
 
 export const registerUser = async (req, res, next) => {
@@ -27,14 +28,14 @@ export const registerUser = async (req, res, next) => {
 
     const response = await Otp.findOneAndDelete({
       email,
-      otp
+      otp,
     });
 
     // If response is null, it means either email didn't exist OR otp didn't match
     if (!response) {
       return res.status(400).json({
         success: false,
-        message: "OTP is invalid or has expired"
+        message: "OTP is invalid or has expired",
       });
     }
 
@@ -82,7 +83,7 @@ export const registerUser = async (req, res, next) => {
 export const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).lean();
     if (!user) {
       return res.status(404).json({
         message: "Invalid credentials",
@@ -94,21 +95,28 @@ export const loginUser = async (req, res, next) => {
         message: "Invalid credentials",
       });
     }
-    const usage_count = await Session.countDocuments({ user: user._id });
-    if (usage_count >= 2) {
-      const oldestSession = await Session.findOneAndDelete({
-        user: user._id,
-      }).sort({ createdAt: 1 });
-      console.log(
-        `Deleted oldest session ${oldestSession?._id} for user ${user._id}`
-      );
+
+    const allSessions = await redisClient.ft.search(
+      "userIdIdx",
+      `@userId:{${user._id}}`,
+      {
+        RETURN: [],
+      }
+    );
+    if (allSessions.total >= 2) {
+      await redisClient.del(allSessions.documents[0].id);
     }
 
-    const session = await Session.create({
-      user: user._id,
-    });
+    const sessionId = crypto.randomUUID();
+    const redisKey = `session:${sessionId}`;
 
-    res.cookie("sessionId", session.id, {
+    await redisClient.json.set(redisKey, "$", {
+      userId: user._id,
+      rootDirId: user.rootDirId,
+    });
+    await redisClient.expire(redisKey, 60 * 60 * 24 * 7);
+
+    res.cookie("sessionId", sessionId, {
       httpOnly: true,
       signed: true,
       maxAge: 1000 * 60 * 60 * 24 * 7,
@@ -132,9 +140,7 @@ export const logoutAllDevices = async (req, res, next) => {
         message: "Unauthorized",
       });
     }
-    const user = req.user;
 
-    await Session.deleteMany({ user: user._id });
     res.clearCookie("sessionId");
     return res.status(204).end();
   } catch (error) {
@@ -143,53 +149,51 @@ export const logoutAllDevices = async (req, res, next) => {
 };
 
 export const sendOtp = async (req, res, next) => {
-    try {
-        const { email } = req.body;
+  try {
+    const { email } = req.body;
 
-        // 1. Optimization: Use crypto for secure, non-predictable numbers
-        // Math.random() is guessable. crypto.randomInt is not.
-        const otp = crypto.randomInt(100000, 999999);
+    // 1. Optimization: Use crypto for secure, non-predictable numbers
+    // Math.random() is guessable. crypto.randomInt is not.
+    const otp = crypto.randomInt(100000, 999999);
 
-        // 2. Optimization: atomic "Upsert" (Update or Insert)
-        // Instead of creating a NEW document every time (spamming your DB),
-        // we update the existing one if it exists, or create a new one.
-        // This ensures 1 Email = 1 Active OTP.
-        await Otp.findOneAndUpdate(
-            { email },
-            { otp, createdAt: Date.now() }, // Reset timer
-            {
-                upsert: true,
-                // new: true,
-                // setDefaultsOnInsert: true
-            }
-        );
+    // 2. Optimization: atomic "Upsert" (Update or Insert)
+    // Instead of creating a NEW document every time (spamming your DB),
+    // we update the existing one if it exists, or create a new one.
+    // This ensures 1 Email = 1 Active OTP.
+    await Otp.findOneAndUpdate(
+      { email },
+      { otp, createdAt: Date.now() }, // Reset timer
+      {
+        upsert: true,
+        // new: true,
+        // setDefaultsOnInsert: true
+      }
+    );
 
-        // Note: You can optionally keep the `User.exists` check if you STRICTLY
-        // only want to send OTPs to registered users. If this is for signup, remove it.
+    // Note: You can optionally keep the `User.exists` check if you STRICTLY
+    // only want to send OTPs to registered users. If this is for signup, remove it.
 
-        // TODO: Add your email sending logic here (NodeMailer, Resend, etc.)
-        const html =
-            `
+    // TODO: Add your email sending logic here (NodeMailer, Resend, etc.)
+    const html = `
         <div style = "font-family:sans-serif;">
         <h2>Your OTP is: ${otp}</h2>
         <p> This OTP is valid for 10 minutes</p>
         <p>Thank you for using our service</p>
         </div>
-        `
-        await transporter.sendMail({
-            from: '"Storage App" <kushwahaanuj0612@gmail.com>', // Sender address
-            to: email, // List of receivers
-            subject: "Storage App OTP", // Subject line
-            html: html,
-        });
+        `;
+    await transporter.sendMail({
+      from: '"Storage App" <kushwahaanuj0612@gmail.com>', // Sender address
+      to: email, // List of receivers
+      subject: "Storage App OTP", // Subject line
+      html: html,
+    });
 
-        return res.status(200).json({
-            success: true,
-            message: "OTP sent successfully on your email",
-        });
-
-    } catch (error) {
-        console.error("Send OTP Error:", error);
-        next(error);
-    }
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent successfully on your email",
+    });
+  } catch (error) {
+    console.error("Send OTP Error:", error);
+    next(error);
+  }
 };

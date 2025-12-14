@@ -80,7 +80,7 @@ const Login = () => {
           type: "success",
           text: resData.message || "Login successfull!",
         });
-        setTimeout(() => navigate("/"), 1000);
+        navigate("/");
       }
     } catch (err) {
       setMessage({

@@ -6,7 +6,8 @@ import {
   registerUser,
   sendOtp,
 } from "../controllers/user.controller.js";
-import Session from "../models/session.model.js";
+import redisClient from "../redis.js";
+import User from "../models/user.model.js";
 
 const router = express.Router();
 
@@ -15,17 +16,22 @@ router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.post("/send-otp", sendOtp);
 
-
-router.get("/", checkAuth, (req, res) => {
+router.get("/", checkAuth, async (req, res) => {
+  const user = await User.findOne({ _id: req.user._id }).lean();
+  if(!user){
+    return res.status(404).json({
+      message : "User not found"
+    })
+  }
   return res.status(200).json({
-    name: req.user.name,
-    email: req.user.email,
+    name: user.name,
+    email: user.email,
   });
 });
 
 router.post("/logout", checkAuth, async (req, res) => {
   const { sessionId } = req.signedCookies;
-  await Session.findByIdAndDelete(sessionId);
+  await redisClient.del(`session:${sessionId}`);
   res.clearCookie("sessionId");
   return res.status(204).end();
 });
