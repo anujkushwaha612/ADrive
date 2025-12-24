@@ -3,6 +3,7 @@ import cors from "cors";
 import directoryRoutes from "./routes/directory.route.js";
 import fileRoutes from "./routes/file.routes.js";
 import userRoutes from "./routes/user.routes.js";
+import authRoutes from "./routes/auth.route.js";
 import cookieParser from "cookie-parser";
 import checkAuth from "./middlewares/auth.middleware.js";
 import { connectDB } from "./config/db.js";
@@ -26,6 +27,7 @@ app.use(express.json());
 app.use("/directory", checkAuth, directoryRoutes);
 app.use("/file", checkAuth, fileRoutes);
 app.use("/user", userRoutes);
+app.use("/auth", authRoutes);
 
 app.use((err, req, res, next) => {
   res.status(err.status || 500).json({

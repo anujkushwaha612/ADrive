@@ -26,6 +26,7 @@ router.get("/", checkAuth, async (req, res) => {
   return res.status(200).json({
     name: user.name,
     email: user.email,
+    picture : user.picture,
   });
 });
 

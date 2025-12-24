@@ -20,8 +20,11 @@ const UserSchema = new Schema({
     },
     password: {
         type: String,
-        required: true,
         min: [6, "Password must be at least 6 characters long"],
+    },
+    picture: {
+        type: String,
+        default: "https://img.freepik.com/free-vector/isolated-young-handsome-man-different-poses-white-background-illustration_632498-859.jpg?semt=ais_hybrid&w=740&q=80"
     },
     rootDirId: {
         type: Schema.Types.ObjectId,

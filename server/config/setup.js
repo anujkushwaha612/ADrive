@@ -16,7 +16,6 @@ try {
           '_id',
           'name',
           'email',
-          'password',
           'rootDirId'
         ],
         properties: {
@@ -32,6 +31,10 @@ try {
             pattern: '^[a-zA-Z0-9._%+-]+@gmail.com$'
           },
           password: {
+            bsonType: 'string',
+            minLength: 6
+          },
+          picture: {
             bsonType: 'string'
           },
           rootDirId: {

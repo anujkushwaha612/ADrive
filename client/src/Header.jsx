@@ -50,13 +50,13 @@ const Header = () => {
   const handleLogoutFromAllDevices = async () => {
     const response = await fetch("http://localhost:4000/user/logout-all", {
       method: "POST",
-      credentials: "include"
-    })
+      credentials: "include",
+    });
     if (response.ok) {
       navigate("/login");
     }
     setDropdownOpen(false);
-  }
+  };
 
   // This is a placeholder for when the user data is loading
   const renderLoadingSkeleton = () => (
@@ -66,10 +66,10 @@ const Header = () => {
   const renderUserAvatar = () => (
     <button
       onClick={() => setDropdownOpen((prev) => !prev)}
-      className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      className="flex items-center rounded-full justify-center w-10 h-10 rounded-full bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
     >
       {/* You can add a real avatar URL to your user object later */}
-      <User className="w-6 h-6 text-gray-600" />
+      {user ? <img className="rounded-full" src={user.picture} alt="" /> : <User className="w-6 h-6 text-gray-600" />}
     </button>
   );
 
