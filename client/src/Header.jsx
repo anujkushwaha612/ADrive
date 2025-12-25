@@ -2,7 +2,6 @@ import React, { useState, useRef } from "react";
 import { Search, Settings, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
-import { useAuth } from "./AppContext";
 
 const useOutsideClick = (ref, handler) => {
   useEffect(() => {
@@ -28,9 +27,9 @@ const Header = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Consume the context!
-  const { user, loading } = useAuth();
 
   useOutsideClick(dropdownRef, () => {
     if (dropdownOpen) setDropdownOpen(false);
@@ -69,9 +68,38 @@ const Header = () => {
       className="flex items-center rounded-full justify-center w-10 h-10 rounded-full bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
     >
       {/* You can add a real avatar URL to your user object later */}
-      {user ? <img className="rounded-full" src={user.picture} alt="" /> : <User className="w-6 h-6 text-gray-600" />}
+      {/* {user ? <img className="rounded-full" src={user.picture} alt="" /> :  */}
+      <User className="w-6 h-6 text-gray-600" />
+      {/* // } */}
     </button>
   );
+
+  const fetchUser = async () => {
+    try {
+      const response = await fetch("http://localhost:4000/user", {
+        credentials: "include",
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        setUser(null);
+        return;
+      }
+
+      if (!response.ok) throw new Error("Failed to fetch user details");
+
+      const data = await response.json();
+      setUser(data);
+    } catch (error) {
+      console.error("Auth fetch error:", error);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUser();
+  }, []);
 
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-4">

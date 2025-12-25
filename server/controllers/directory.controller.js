@@ -90,53 +90,43 @@ export const deleteDirectory = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // 1. Find directory
-    const parentDirectoryData = await Directory.findOne({ _id: id });
-    if (!parentDirectoryData) {
+    const directory = await Directory.findOne({ _id: id, userId: req.user._id });
+    if (!directory) {
       return res.status(404).json({ message: "Directory not found" });
     }
 
-    // 2. Get all files in directory
-    const files = await File.find({
-      parentDirId: parentDirectoryData._id,
-    }).lean();
-
-    // 3. Get all subdirectories (one level deep)
-    const directories = await Directory.find({
-      parentDirId: parentDirectoryData._id,
-    }).lean();
-
-    // 4. Delete files from storage + DB
-    await Promise.all(
-      files.map(async (file) => {
-        const fileId = file._id?.toString();
-        const filePath = `./storage/${fileId}${file.extension}`;
-        try {
-          await rm(filePath);
-        } catch (err) {
-          console.error(`Failed to delete file: ${filePath}`, err);
-        }
-        await File.deleteOne({ _id: file._id });
-      })
-    );
-
-    // 5. Delete subdirectories
-    await Promise.all(
-      directories.map(async (directory) => {
-        await Directory.deleteOne({ _id: directory._id });
-      })
-    );
-
-    // 6. Delete parent directory
-    await Directory.deleteOne({ _id: parentDirectoryData._id });
+    await deleteFolderRecursively(id);
 
     return res.status(200).json({
-      message: "Directory deleted successfully",
+      message: "Directory and all nested contents deleted successfully",
     });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Failed to delete the directory",
-    });
+    next(error);
   }
+};
+
+const deleteFolderRecursively = async (directoryId) => {
+  const files = await File.find({ parentDirId: directoryId }).lean();
+
+  await Promise.all(
+    files.map(async (file) => {
+      const filePath = `./storage/${file._id}${file.extension}`;
+      try {
+        await rm(filePath, { force: true });
+      } catch (err) {
+        console.error(`Failed to delete physical file: ${filePath}`, err);
+      }
+      await File.deleteOne({ _id: file._id });
+    })
+  );
+
+  const subDirectories = await Directory.find({ parentDirId: directoryId }).lean();
+
+  await Promise.all(
+    subDirectories.map(async (dir) => {
+      await deleteFolderRecursively(dir._id);
+    })
+  );
+
+  await Directory.deleteOne({ _id: directoryId });
 };

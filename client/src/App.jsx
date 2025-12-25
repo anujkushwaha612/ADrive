@@ -3,7 +3,7 @@ import DirectoryView from "./DirectoryView";
 import Register from "./Register";
 import Login from "./Login";
 import UnauthorizedPage from "./UnauthorizedPage";
-import { AuthProvider } from "./AppContext";
+import AllUsers from "./admin/AllUsers";
 
 const router = createBrowserRouter([
   {
@@ -23,17 +23,17 @@ const router = createBrowserRouter([
     element: <Login />,
   },
   {
+    path: "/admin/users",
+    element: <AllUsers />,
+  },
+  {
     path: "/unauthorized",
     element: <UnauthorizedPage />,
   },
 ]);
 
 function App() {
-  return (
-    <AuthProvider>
-      <RouterProvider router={router} />
-    </AuthProvider>
-)
+  return <RouterProvider router={router} />;
 }
 
 export default App;

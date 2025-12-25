@@ -33,6 +33,8 @@ export const loginWithGoogle = async (req, res, next) => {
                 rootDirId: user.rootDirId,
             });
             await redisClient.expire(redisKey, 60 * 60 * 24 * 7);
+            user.isLoggedIn = true;
+            await user.save();
             res.cookie("sessionId", sessionId, {
                 httpOnly: true,
                 signed: true,
@@ -65,6 +67,7 @@ export const loginWithGoogle = async (req, res, next) => {
                 email,
                 picture,
                 rootDirId,
+                isLoggedIn: true,
             },
             { mongooseSession }
         );

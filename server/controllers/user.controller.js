@@ -7,6 +7,8 @@ import Session from "../models/session.model.js";
 import Otp from "../models/otp.model.js";
 import nodemailer from "nodemailer";
 import redisClient from "../redis.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -140,9 +142,18 @@ export const logoutAllDevices = async (req, res, next) => {
         message: "Unauthorized",
       });
     }
-
+    const sessions = await redisClient.ft.search("userIdIdx", `@userId:{${req.user._id}}`, {
+      RETURN: []
+    })
+    if (sessions.total > 0) {
+      const sessionIds = sessions.documents.map(doc => doc.id)
+      await redisClient.del(sessionIds)
+    }
     res.clearCookie("sessionId");
-    return res.status(204).end();
+
+    return res.status(200).json({
+      message: `Successfully logged out. Terminated ${sessions.total} sessions.`
+    });
   } catch (error) {
     next(error);
   }

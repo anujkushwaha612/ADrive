@@ -9,7 +9,6 @@ import {
   Cloud,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "./AppContext";
 import { GoogleLogin } from "@react-oauth/google";
 import { loginWithGoogle } from "./api/loginWithGoogle";
 
@@ -24,7 +23,6 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const navigate = useNavigate();
-  const { fetchUser } = useAuth();
 
   const validateForm = () => {
     const newErrors = {};
@@ -77,7 +75,6 @@ const Login = () => {
           resData.message || "Failed to login user please try again"
         );
       if (resData.success) {
-        await fetchUser();
         setMessage({
           type: "success",
           text: resData.message || "Login successfull!",
@@ -261,7 +258,6 @@ const Login = () => {
                   credentialResponse.credential
                 );
                 if (data.success) {
-                  await fetchUser();
                   navigate("/");
                 }
               }}

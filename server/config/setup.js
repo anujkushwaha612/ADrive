@@ -16,6 +16,8 @@ try {
           '_id',
           'name',
           'email',
+          'role',
+          'isLoggedIn',
           'rootDirId'
         ],
         properties: {
@@ -34,8 +36,15 @@ try {
             bsonType: 'string',
             minLength: 6
           },
+          role : {
+            bsonType : "string",
+            enum : ["user", "admin", "manager"],
+          },
           picture: {
             bsonType: 'string'
+          },
+          isLoggedIn: {
+            bsonType: 'bool'
           },
           rootDirId: {
             bsonType: 'objectId'
