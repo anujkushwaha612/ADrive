@@ -1,6 +1,7 @@
 import { rm } from "node:fs/promises";
 import Directory from "../models/directory.model.js";
 import File from "../models/file.model.js";
+import { handleFolderSizeUpdate } from "../utils/folderSize.utils.js";
 
 export const getDirectoryById = async (req, res, next) => {
   try {
@@ -96,6 +97,8 @@ export const deleteDirectory = async (req, res, next) => {
     }
 
     await deleteFolderRecursively(id);
+
+    handleFolderSizeUpdate(directory.parentDirId, -directory.size);
 
     return res.status(200).json({
       message: "Directory and all nested contents deleted successfully",

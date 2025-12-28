@@ -1,357 +1,15 @@
-import React, { useRef, useState, useEffect } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  Upload,
-  FolderPlus,
-  Folder,
-  File,
-  Download,
-  Edit,
-  Trash2,
-  Check,
-  X,
-  Grid,
-  List,
-  Search,
-  User,
-  Settings,
-} from "lucide-react";
-import Header from "./Header";
-
-// Toolbar Component
-const Toolbar = ({
-  onUploadClick,
-  onCreateFolder,
-  viewMode,
-  setViewMode,
-  uploadProgress,
-  isCreatingFolder,
-  setIsCreatingFolder,
-  newFolderName,
-  setNewFolderName,
-  handleCreateDirectory,
-}) => {
-  return (
-    <div className="bg-white border-b border-gray-200 px-6 py-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={onUploadClick}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-          >
-            <Upload className="w-4 h-4" />
-            <span>Upload</span>
-          </button>
-
-          <button
-            onClick={() => setIsCreatingFolder(true)}
-            className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center space-x-2"
-          >
-            <FolderPlus className="w-4 h-4" />
-            <span>New Folder</span>
-          </button>
-
-          {uploadProgress > 0 && uploadProgress < 100 && (
-            <div className="flex items-center space-x-2">
-              <div className="w-32 bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                ></div>
-              </div>
-              <span className="text-sm text-gray-600">{uploadProgress}%</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setViewMode("grid")}
-            className={`p-2 rounded-lg ${
-              viewMode === "grid"
-                ? "bg-gray-100 text-blue-600"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
-          >
-            <Grid className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={`p-2 rounded-lg ${
-              viewMode === "list"
-                ? "bg-gray-100 text-blue-600"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
-          >
-            <List className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      {isCreatingFolder && (
-        <div className="mt-4 flex items-center space-x-3">
-          <input
-            type="text"
-            placeholder="Folder name"
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 flex-1 max-w-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-            autoFocus
-          />
-          <button
-            onClick={handleCreateDirectory}
-            className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700"
-          >
-            <Check className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => {
-              setIsCreatingFolder(false);
-              setNewFolderName("");
-            }}
-            className="border border-gray-300 text-gray-600 p-2 rounded-lg hover:bg-gray-50"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Item Component (for both files and folders)
-const DriveItem = ({
-  item,
-  type,
-  isRenaming,
-  newName,
-  setNewName,
-  onRename,
-  onSave,
-  onDelete,
-  onCancelRename,
-  viewMode,
-}) => {
-  const BASE_URL = "http://localhost:4000";
-
-  // --- Utility for displaying file size
-  const renderFileSize = (size) => {
-    if (!size) return "";
-    if (size > 1048576) return `${(size / 1048576).toFixed(1)} MB`;
-    if (size > 1024) return `${(size / 1024).toFixed(1)} KB`;
-    return `${size} B`;
-  };
-
-  // --- Modern Card Style for Grid View
-  if (viewMode === "grid") {
-    return (
-      <div className="group relative bg-white rounded-2xl border border-gray-100 hover:shadow-2xl p-4 transition-all transform hover:-translate-y-1 duration-150 flex flex-col items-center">
-        {/* Icon */}
-        <div className="mb-3 flex justify-center w-full">
-          {type === "folder" ? (
-            <span className="inline-flex justify-center items-center w-14 h-14 rounded-xl bg-gradient-to-br from-blue-100 to-blue-300 group-hover:from-blue-200">
-              <Folder className="w-8 h-8 text-blue-600 group-hover:text-blue-700" />
-            </span>
-          ) : (
-            <span className="inline-flex justify-center items-center w-14 h-14 rounded-xl bg-gradient-to-br from-green-100 to-green-300 group-hover:from-green-200">
-              <File className="w-8 h-8 text-green-600 group-hover:text-green-700" />
-            </span>
-          )}
-        </div>
-
-        {/* Name/edit input */}
-        <div className="text-center w-full">
-          {isRenaming ? (
-            <div className="flex flex-col items-center gap-2">
-              <div className="relative w-full">
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full text-sm text-gray-900 border border-blue-400 bg-blue-50 rounded-md px-3 py-2 pr-8 outline-none focus:ring-2 focus:ring-blue-400 transition"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") onSave();
-                    if (e.key === "Escape") onCancelRename();
-                  }}
-                />
-                <div className="absolute right-2 top-2 flex items-center gap-1">
-                  <button
-                    onClick={onSave}
-                    className="text-green-600 hover:text-green-800"
-                    title="Save"
-                  >
-                    <Check className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={onCancelRename}
-                    className="text-gray-500 hover:text-gray-700"
-                    title="Cancel"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              <p
-                className="font-medium text-sm text-gray-900 truncate mb-1"
-                title={item.name}
-              >
-                {item.name}
-              </p>
-              {type === "file" && item.size && (
-                <div className="text-xs text-gray-400">
-                  {renderFileSize(item.size)}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Overlay actions, only visible on hover */}
-        {!isRenaming && (
-          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex gap-2">
-            {type === "folder" ? (
-              <Link
-                to={`/directory/${item.id}`}
-                className="p-1 bg-white rounded-full shadow hover:bg-blue-50 text-blue-600"
-                title="Open"
-              >
-                <Folder className="w-4 h-4" />
-              </Link>
-            ) : (
-              <>
-                <Link
-                  to={`${BASE_URL}/file/${item.id}`}
-                  className="p-1 bg-white rounded-full shadow hover:bg-blue-50 text-blue-600"
-                  title="Open"
-                >
-                  <File className="w-4 h-4" />
-                </Link>
-                <a
-                  href={`${BASE_URL}/file/${item.id}?action=download`}
-                  className="p-1 bg-white rounded-full shadow hover:bg-green-50 text-green-600"
-                  title="Download"
-                >
-                  <Download className="w-4 h-4" />
-                </a>
-              </>
-            )}
-            <button
-              onClick={onRename}
-              className="p-1 bg-white rounded-full shadow hover:bg-yellow-50 text-yellow-600"
-              title="Rename"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-            <button
-              onClick={onDelete}
-              className="p-1 bg-white rounded-full shadow hover:bg-red-50 text-red-600"
-              title="Delete"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // --- Minimal & Clean List View
-  return (
-    <div className="bg-white border-b border-gray-100 hover:bg-gray-50 rounded-xl px-4 py-2 flex items-center justify-between shadow-sm transition">
-      <div className="flex items-center space-x-3 flex-1">
-        {type === "folder" ? (
-          <Folder className="w-5 h-5 text-blue-500" />
-        ) : (
-          <File className="w-5 h-5 text-green-500" />
-        )}
-        {isRenaming ? (
-          <div className="flex items-center gap-2 flex-1">
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              className="px-3 py-1.5 text-sm rounded-lg border border-blue-400 shadow-sm focus:ring-2 focus:ring-blue-400 focus:outline-none w-full max-w-xs"
-              autoFocus
-              placeholder="Enter new name"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSave();
-                if (e.key === "Escape") onCancelRename();
-              }}
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={onSave}
-                className="p-1.5 rounded-full hover:bg-green-100 text-green-600 transition"
-                title="Save"
-              >
-                Save
-              </button>
-              <button
-                onClick={onCancelRename}
-                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-600 transition"
-                title="Cancel"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <span className="text-gray-900 flex-1 truncate">{item.name}</span>
-        )}
-      </div>
-      {!isRenaming && (
-        <div className="flex items-center gap-2">
-          {type === "folder" ? (
-            <Link
-              to={`/directory/${item.id}`}
-              className="text-blue-600 hover:text-blue-800 px-2 py-1 rounded text-sm"
-              title="Open"
-            >
-              Open
-            </Link>
-          ) : (
-            <>
-              <Link
-                to={`${BASE_URL}/file/${item.id}`}
-                className="text-blue-600 hover:text-blue-800 px-2 py-1 rounded text-sm"
-              >
-                Open
-              </Link>
-              <a
-                href={`${BASE_URL}/file/${item.id}?action=download`}
-                className="text-green-600 hover:text-green-800 px-2 py-1 rounded text-sm"
-              >
-                Download
-              </a>
-            </>
-          )}
-          <button
-            onClick={onRename}
-            className="text-yellow-600 hover:text-yellow-800 px-2 py-1 rounded text-sm"
-            title="Rename"
-          >
-            Rename
-          </button>
-          <button
-            onClick={onDelete}
-            className="text-red-600 hover:text-red-800 px-2 py-1 rounded text-sm"
-            title="Delete"
-          >
-            Delete
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
+import { useRef, useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Folder } from "lucide-react";
+import Header from "./components/Header";
+import DriveItem from "./components/DriveItem";
+import Toolbar from "./components/Toolbar";
+import { toast } from "sonner";
+import { ErrorToast, LoadingToast, SuccessToast } from "./components/ToastComponents";
 
 // Main Directory View Component
 const DirectoryView = () => {
-  const BASE_URL = "http://localhost:4000";
+  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
   const { dirId } = useParams();
   const [directoriesList, setDirectoriesList] = useState([]);
   const [filesList, setFilesList] = useState([]);
@@ -404,25 +62,102 @@ const DirectoryView = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${BASE_URL}/file/${dirId || ""}`, true);
-    xhr.setRequestHeader("filename", `${file.name}`);
-    xhr.withCredentials = true;
-    xhr.addEventListener("load", () => {
-      setTimeout(() => {
-        getDirectoryItems();
-        setProgress(0);
-        inputRef.current.value = "";
-      }, 500);
-    });
+    let toastId; // We need this ID to dismiss the loading toast later
 
-    xhr.upload.addEventListener("progress", (e) => {
-      const totalProgress = (e.loaded / e.total) * 100;
-      setProgress(totalProgress.toFixed(2));
-    });
+    try {
+        // --- STEP 1: Handshake ---
+        const initResponse = await fetch(`${BASE_URL}/file/init-upload`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ filename: file.name, filesize: file.size }),
+        });
 
-    xhr.send(file);
-  }
+        if (!initResponse.ok) {
+            const errorData = await initResponse.json();
+            // Show Custom Error
+            toast.custom((t) => (
+                <ErrorToast t={t} title="Permission Denied" message={errorData.error || "Upload denied"} />
+            ));
+            return;
+        }
+
+        const { uploadToken } = await initResponse.json();
+
+        // --- START LOADING TOAST ---
+        // We save the ID so we can dismiss strictly this toast later
+        toastId = toast.custom(() => (
+            <LoadingToast message="Uploading File" subMessage={`Sending ${file.name}...`} />
+        ), { duration: Infinity }); // Keep open until we manually dismiss
+
+        // --- STEP 2: Actual Upload ---
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${BASE_URL}/file/${dirId || ""}`, true);
+        xhr.setRequestHeader("x-upload-token", uploadToken);
+        xhr.setRequestHeader("filename", file.name);
+        xhr.setRequestHeader("filesize", file.size);
+        xhr.withCredentials = true;
+
+        xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) {
+                const totalProgress = (e.loaded / e.total) * 100;
+                setProgress(totalProgress.toFixed(2));
+            }
+        });
+
+        xhr.addEventListener("load", () => {
+            toast.dismiss(toastId); // Remove Loading Toast
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+                // ✅ Show Custom Success
+                toast.custom((t) => (
+                    <SuccessToast 
+                        t={t} 
+                        title="Upload Complete" 
+                        message={`${file.name} has been safely stored.`} 
+                    />
+                ));
+                getDirectoryItems();
+            } else {
+                // ❌ Show Custom Error (Backend)
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    toast.custom((t) => (
+                        <ErrorToast t={t} title="Upload Failed" message={response.message || "Server rejected the file."} />
+                    ));
+                } catch (e) {
+                    toast.custom((t) => (
+                        <ErrorToast t={t} title="Upload Failed" message="An unexpected error occurred." />
+                    ));
+                }
+            }
+            // Reset Progress Bar
+            setTimeout(() => {
+                setProgress(0);
+                if (inputRef.current) inputRef.current.value = "";
+            }, 500);
+        });
+
+        xhr.addEventListener("error", () => {
+            toast.dismiss(toastId);
+            // ❌ Show Custom Error (Network)
+            toast.custom((t) => (
+                <ErrorToast t={t} title="Network Error" message="Please check your internet connection." />
+            ));
+            setProgress(0);
+        });
+
+        xhr.send(file);
+
+    } catch (error) {
+        if (toastId) toast.dismiss(toastId);
+        // ❌ Show Custom Error (Handshake/Catch)
+        toast.custom((t) => (
+            <ErrorToast t={t} title="Error" message={error.message} />
+        ));
+        if (inputRef.current) inputRef.current.value = "";
+    }
+}
 
   async function handleFileDelete(fileId) {
     try {
@@ -468,8 +203,6 @@ const DirectoryView = () => {
         credentials: "include",
       });
 
-      console.log(response);
-
       await response.json();
       setRenamingFile(null);
       setNewFilename("");
@@ -481,7 +214,6 @@ const DirectoryView = () => {
 
   async function saveDirectory(directoryId) {
     try {
-      console.log("Renaming to:", newFilename);
       const response = await fetch(`${BASE_URL}/directory/${directoryId}`, {
         method: "PATCH",
         headers: {
@@ -492,9 +224,6 @@ const DirectoryView = () => {
         }),
         credentials: "include",
       });
-
-      const data = await response.json();
-      console.log(data);
       setRenamingFile(null);
       setNewFilename("");
       getDirectoryItems();

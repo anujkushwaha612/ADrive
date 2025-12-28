@@ -16,6 +16,7 @@ try {
           '_id',
           'name',
           'email',
+          'maxStorage',
           'role',
           'isLoggedIn',
           'rootDirId'
@@ -28,6 +29,9 @@ try {
             bsonType: 'string',
             minLength: 3
           },
+          maxStorage: {
+            bsonType: 'long',
+          },
           email: {
             bsonType: 'string',
             pattern: '^[a-zA-Z0-9._%+-]+@gmail.com$'
@@ -36,9 +40,9 @@ try {
             bsonType: 'string',
             minLength: 6
           },
-          role : {
-            bsonType : "string",
-            enum : ["user", "admin", "manager"],
+          role: {
+            bsonType: "string",
+            enum: ["user", "admin", "manager"],
           },
           picture: {
             bsonType: 'string'
@@ -62,7 +66,7 @@ try {
     validator: {
       $jsonSchema: {
         bsonType: "object",
-        required: ["_id", "name", "userId", "parentDirId"],
+        required: ["_id", "name", "size", "userId", "parentDirId", "createdAt", "updatedAt"],
         properties: {
           _id: {
             bsonType: "objectId",
@@ -70,11 +74,20 @@ try {
           name: {
             bsonType: "string",
           },
+          size: {
+            bsonType: "int",
+          },
           userId: {
             bsonType: "objectId",
           },
           parentDirId: {
             bsonType: ["objectId", "null"],
+          },
+          createdAt: {
+            bsonType: "date",
+          },
+          updatedAt: {
+            bsonType: "date",
           },
         },
         additionalProperties: false,
@@ -89,13 +102,16 @@ try {
     validator: {
       $jsonSchema: {
         bsonType: "object",
-        required: ["_id", "extension", "name", "userId", "parentDirId"],
+        required: ["_id", "extension", "size", "name", "userId", "parentDirId", "createdAt", "updatedAt"],
         properties: {
           _id: {
             bsonType: "objectId",
           },
           name: {
             bsonType: "string",
+          },
+          size: {
+            bsonType: "int",
           },
           extension: {
             bsonType: "string",
@@ -105,6 +121,12 @@ try {
           },
           parentDirId: {
             bsonType: "objectId",
+          },
+          createdAt: {
+            bsonType: "date",
+          },
+          updatedAt: {
+            bsonType: "date",
           },
         },
         additionalProperties: false,

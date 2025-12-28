@@ -35,6 +35,11 @@ const UserSchema = new Schema({
         type: String,
         default: "https://img.freepik.com/free-vector/isolated-young-handsome-man-different-poses-white-background-illustration_632498-859.jpg?semt=ais_hybrid&w=740&q=80"
     },
+    maxStorage: {
+        type: Number,
+        required: true,
+        default: 1024 * 1024 * 1024 * 15,
+    },
     rootDirId: {
         type: Schema.Types.ObjectId,
         ref: "Directory",

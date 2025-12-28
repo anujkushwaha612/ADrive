@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
-import { loginWithGoogle } from "./api/loginWithGoogle";
+import { loginWithGoogle } from "../api/loginWithGoogle";
 
 const Login = () => {
   const [data, setData] = useState({
@@ -68,7 +68,6 @@ const Login = () => {
         body: JSON.stringify(data),
         credentials: "include",
       });
-      console.log(res);
       const resData = await res.json();
       if (!res.ok)
         throw new Error(

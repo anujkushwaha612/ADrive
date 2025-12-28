@@ -14,6 +14,10 @@ const fileSchema = new Schema({
         ref: "Directory",
         required: true,
     },
+    size: {
+        type: Number,
+        required: true,
+    },
     userId: {
         type: Schema.Types.ObjectId,
         ref: "User",
@@ -21,7 +25,8 @@ const fileSchema = new Schema({
     },
 }, {
     strict: "throw",
-    versionKey: false
+    versionKey: false,
+    timestamps: true,
 })
 
 const File = model("File", fileSchema);

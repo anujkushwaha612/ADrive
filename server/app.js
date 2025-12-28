@@ -8,18 +8,16 @@ import adminRoutes from "./routes/admin.route.js";
 import cookieParser from "cookie-parser";
 import checkAuth from "./middlewares/auth.middleware.js";
 import { connectDB } from "./config/db.js";
-import { configDotenv } from "dotenv";
-configDotenv();
 
 const mySecretKey = process.env.COOKIE_SECRET_KEY;
-
+const PORT = process.env.PORT
 await connectDB();
 
 const app = express();
 app.use(cookieParser(mySecretKey));
 app.use(
   cors({
-    origin: "http://localhost:5173", // your frontend origin
+    origin: process.env.FRONTEND_URL, // your frontend origin
     credentials: true, // allow cookies to be sent
   })
 );
@@ -37,7 +35,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(4000, () => {
+app.listen(PORT, () => {
   console.log(`Server Started`);
 });
 

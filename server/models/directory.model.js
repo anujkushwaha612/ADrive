@@ -5,6 +5,11 @@ const directorySchema = new Schema({
         type: String,
         required: true,
     },
+    size:{
+        type: Number,
+        required: true,
+        default: 0,
+    },
     parentDirId: {
         type: Schema.Types.ObjectId,
         ref: "Directory",
@@ -17,7 +22,8 @@ const directorySchema = new Schema({
     },
 }, {
     strict: "throw",
-    versionKey: false
+    versionKey: false,
+    timestamps: true,
 })
 
 const Directory = model("Directory", directorySchema);

@@ -1,5 +1,3 @@
-import Session from "../models/session.model.js";
-import User from "../models/user.model.js";
 import redisClient from "../redis.js";
 
 export default async function checkAuth(req, res, next) {

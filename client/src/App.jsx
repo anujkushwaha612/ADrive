@@ -1,9 +1,10 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import DirectoryView from "./DirectoryView";
-import Register from "./Register";
-import Login from "./Login";
-import UnauthorizedPage from "./UnauthorizedPage";
+import Register from "./auth/Register";
+import Login from "./auth/Login";
+import UnauthorizedPage from "./components/UnauthorizedPage";
 import AllUsers from "./admin/AllUsers";
+import { Toaster } from "./components/ui/sonner";
 
 const router = createBrowserRouter([
   {
@@ -33,7 +34,12 @@ const router = createBrowserRouter([
 ]);
 
 function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <Toaster />
+    </>
+  );
 }
 
 export default App;

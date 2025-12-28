@@ -3,12 +3,12 @@ import Directory from "../models/directory.model.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import Session from "../models/session.model.js";
 import Otp from "../models/otp.model.js";
 import nodemailer from "nodemailer";
 import redisClient from "../redis.js";
-import dotenv from "dotenv";
-dotenv.config();
+import { z } from "zod/v4";
+import { loginValidator, registerValidator } from "../validators/auth.validator.js";
+
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -22,7 +22,15 @@ const transporter = nodemailer.createTransport({
 export const registerUser = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    const { name, email, password, otp } = req.body;
+    const { success, error, data } = registerValidator.safeParse(req.body);
+    if (!success) {
+      const errors = z.flattenError(error).fieldErrors;
+      return res.status(400).json({
+        success: false,
+        message: Object.values(errors)[0]?.[0] || "Registration failed",
+      });
+    }
+    const { name, email, password, otp } = data;
     const userId = new mongoose.Types.ObjectId();
     const rootDirId = new mongoose.Types.ObjectId();
 
@@ -84,7 +92,15 @@ export const registerUser = async (req, res, next) => {
 
 export const loginUser = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { success, error, data } = loginValidator.safeParse(req.body);
+    if (!success) {
+      const errors = z.flattenError(error).fieldErrors;
+      return res.status(400).json({
+        success: false,
+        message: Object.values(errors)[0]?.[0] || "Login failed",
+      });
+    }
+    const { email, password } = data;
     const user = await User.findOne({ email }).lean();
     if (!user) {
       return res.status(404).json({
@@ -162,6 +178,16 @@ export const logoutAllDevices = async (req, res, next) => {
 export const sendOtp = async (req, res, next) => {
   try {
     const { email } = req.body;
+
+    const emailValidator = z.email();
+
+    const result = emailValidator.safeParse(email);
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid email",
+      });
+    }
 
     // 1. Optimization: Use crypto for secure, non-predictable numbers
     // Math.random() is guessable. crypto.randomInt is not.

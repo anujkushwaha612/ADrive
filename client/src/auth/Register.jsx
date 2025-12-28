@@ -12,7 +12,7 @@ import {
 import { useNavigate, Link } from "react-router-dom";
 import { useEffect } from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import { loginWithGoogle } from "./api/loginWithGoogle";
+import { loginWithGoogle } from "../api/loginWithGoogle";
 
 const Register = () => {
   const [data, setData] = useState({

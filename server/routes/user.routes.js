@@ -8,6 +8,7 @@ import {
 } from "../controllers/user.controller.js";
 import redisClient from "../redis.js";
 import User from "../models/user.model.js";
+import Directory from "../models/directory.model.js";
 
 const router = express.Router();
 
@@ -23,10 +24,14 @@ router.get("/", checkAuth, async (req, res) => {
       message : "User not found"
     })
   }
+
+  const usedSpace = await Directory.findById(req.user.rootDirId).lean().select("size");
   return res.status(200).json({
     name: user.name,
     email: user.email,
     picture : user.picture,
+    maxStorage : user.maxStorage,
+    storageUsed : usedSpace.size,
   });
 });
 
