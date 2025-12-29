@@ -22,10 +22,6 @@ const UserSchema = new Schema({
         type: String,
         min: [6, "Password must be at least 6 characters long"],
     },
-    isLoggedIn: {
-        type: Boolean,
-        default: false,
-    },
     role: {
         type: String,
         enum: ["user", "admin", "manager"],
@@ -38,7 +34,7 @@ const UserSchema = new Schema({
     maxStorage: {
         type: Number,
         required: true,
-        default: 1024 * 1024 * 1024 * 15,
+        default: 1024 * 1024 * 1024 ,
     },
     rootDirId: {
         type: Schema.Types.ObjectId,

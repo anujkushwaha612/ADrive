@@ -33,7 +33,6 @@ export const loginWithGoogle = async (req, res, next) => {
                 rootDirId: user.rootDirId,
             });
             await redisClient.expire(redisKey, 60 * 60 * 24 * 7);
-            user.isLoggedIn = true;
             await user.save();
             res.cookie("sessionId", sessionId, {
                 httpOnly: true,
@@ -56,6 +55,7 @@ export const loginWithGoogle = async (req, res, next) => {
                 name: `root-${email}`,
                 parentDirId: null,
                 userId,
+                path: [{ _id: rootDirId, name: `root-${email}` }],
             },
             { mongooseSession }
         );
@@ -67,7 +67,6 @@ export const loginWithGoogle = async (req, res, next) => {
                 email,
                 picture,
                 rootDirId,
-                isLoggedIn: true,
             },
             { mongooseSession }
         );
@@ -93,8 +92,7 @@ export const loginWithGoogle = async (req, res, next) => {
 
     } catch (error) {
         mongooseSession.abortTransaction();
-        console.log(error);
-        // next(error);
+        next(error);
         // if (error.code === 11000 && error.keyPattern.email) {
         //     return res.status(409).json({
         //         error: "User already exist",

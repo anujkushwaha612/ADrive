@@ -5,7 +5,7 @@ const directorySchema = new Schema({
         type: String,
         required: true,
     },
-    size:{
+    size: {
         type: Number,
         required: true,
         default: 0,
@@ -20,6 +20,16 @@ const directorySchema = new Schema({
         ref: "User",
         required: true,
     },
+    path: [{
+        _id: {
+            type: Schema.Types.ObjectId,
+            ref: "Directory",
+        },
+        name: {
+            type: String,
+            required: true,
+        }
+    }]
 }, {
     strict: "throw",
     versionKey: false,

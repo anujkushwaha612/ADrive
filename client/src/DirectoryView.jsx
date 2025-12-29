@@ -5,7 +5,12 @@ import Header from "./components/Header";
 import DriveItem from "./components/DriveItem";
 import Toolbar from "./components/Toolbar";
 import { toast } from "sonner";
-import { ErrorToast, LoadingToast, SuccessToast } from "./components/ToastComponents";
+import {
+  ErrorToast,
+  LoadingToast,
+  SuccessToast,
+} from "./components/ToastComponents";
+import Breadcrumbs from "./components/Breadcrumbs";
 
 // Main Directory View Component
 const DirectoryView = () => {
@@ -13,15 +18,22 @@ const DirectoryView = () => {
   const { dirId } = useParams();
   const [directoriesList, setDirectoriesList] = useState([]);
   const [filesList, setFilesList] = useState([]);
+  const [currentPath, setCurrentPath] = useState([]);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
-  const [renamingFile, setRenamingFile] = useState(null);
-  const [newFilename, setNewFilename] = useState("");
   const [directoryname, setDirectoryname] = useState("");
   const [viewMode, setViewMode] = useState("list");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const inputRef = useRef(null);
   const navigate = useNavigate();
+
+  const handleNavigate = (folderId) => {
+    if (!folderId) {
+      navigate("/"); // Go to Root
+    } else {
+      navigate(`/directory/${folderId}`);
+    }
+  };
 
   async function getDirectoryItems() {
     try {
@@ -45,6 +57,12 @@ const DirectoryView = () => {
 
       setDirectoriesList(data.directories);
       setFilesList(data.files);
+
+      if (!dirId) {
+        setCurrentPath([]);
+      } else if (data.path) {
+        setCurrentPath(data.path);
+      }
     } catch (error) {
       console.error("Error fetching directory items:", error);
     }
@@ -62,102 +80,115 @@ const DirectoryView = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    let toastId; // We need this ID to dismiss the loading toast later
+    let toastId;
 
     try {
-        // --- STEP 1: Handshake ---
-        const initResponse = await fetch(`${BASE_URL}/file/init-upload`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ filename: file.name, filesize: file.size }),
-        });
+      // --- STEP 1: Handshake ---
+      const initResponse = await fetch(`${BASE_URL}/file/init-upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ filename: file.name, filesize: file.size }),
+      });
 
-        if (!initResponse.ok) {
-            const errorData = await initResponse.json();
-            // Show Custom Error
-            toast.custom((t) => (
-                <ErrorToast t={t} title="Permission Denied" message={errorData.error || "Upload denied"} />
-            ));
-            return;
-        }
-
-        const { uploadToken } = await initResponse.json();
-
-        // --- START LOADING TOAST ---
-        // We save the ID so we can dismiss strictly this toast later
-        toastId = toast.custom(() => (
-            <LoadingToast message="Uploading File" subMessage={`Sending ${file.name}...`} />
-        ), { duration: Infinity }); // Keep open until we manually dismiss
-
-        // --- STEP 2: Actual Upload ---
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", `${BASE_URL}/file/${dirId || ""}`, true);
-        xhr.setRequestHeader("x-upload-token", uploadToken);
-        xhr.setRequestHeader("filename", file.name);
-        xhr.setRequestHeader("filesize", file.size);
-        xhr.withCredentials = true;
-
-        xhr.upload.addEventListener("progress", (e) => {
-            if (e.lengthComputable) {
-                const totalProgress = (e.loaded / e.total) * 100;
-                setProgress(totalProgress.toFixed(2));
-            }
-        });
-
-        xhr.addEventListener("load", () => {
-            toast.dismiss(toastId); // Remove Loading Toast
-
-            if (xhr.status >= 200 && xhr.status < 300) {
-                // ✅ Show Custom Success
-                toast.custom((t) => (
-                    <SuccessToast 
-                        t={t} 
-                        title="Upload Complete" 
-                        message={`${file.name} has been safely stored.`} 
-                    />
-                ));
-                getDirectoryItems();
-            } else {
-                // ❌ Show Custom Error (Backend)
-                try {
-                    const response = JSON.parse(xhr.responseText);
-                    toast.custom((t) => (
-                        <ErrorToast t={t} title="Upload Failed" message={response.message || "Server rejected the file."} />
-                    ));
-                } catch (e) {
-                    toast.custom((t) => (
-                        <ErrorToast t={t} title="Upload Failed" message="An unexpected error occurred." />
-                    ));
-                }
-            }
-            // Reset Progress Bar
-            setTimeout(() => {
-                setProgress(0);
-                if (inputRef.current) inputRef.current.value = "";
-            }, 500);
-        });
-
-        xhr.addEventListener("error", () => {
-            toast.dismiss(toastId);
-            // ❌ Show Custom Error (Network)
-            toast.custom((t) => (
-                <ErrorToast t={t} title="Network Error" message="Please check your internet connection." />
-            ));
-            setProgress(0);
-        });
-
-        xhr.send(file);
-
-    } catch (error) {
-        if (toastId) toast.dismiss(toastId);
-        // ❌ Show Custom Error (Handshake/Catch)
+      if (!initResponse.ok) {
+        const errorData = await initResponse.json();
         toast.custom((t) => (
-            <ErrorToast t={t} title="Error" message={error.message} />
+          <ErrorToast
+            t={t}
+            title="Permission Denied"
+            message={errorData.error || "Upload denied"}
+          />
         ));
-        if (inputRef.current) inputRef.current.value = "";
+        return;
+      }
+
+      const { uploadToken } = await initResponse.json();
+
+      toastId = toast.custom(
+        () => (
+          <LoadingToast
+            message="Uploading File"
+            subMessage={`Sending ${file.name}...`}
+          />
+        ),
+        { duration: Infinity }
+      );
+
+      // --- STEP 2: Actual Upload ---
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${BASE_URL}/file/${dirId || ""}`, true);
+      xhr.setRequestHeader("x-upload-token", uploadToken);
+      xhr.setRequestHeader("filename", file.name);
+      xhr.setRequestHeader("filesize", file.size);
+      xhr.withCredentials = true;
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const totalProgress = (e.loaded / e.total) * 100;
+          setProgress(totalProgress.toFixed(2));
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        toast.dismiss(toastId);
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          toast.custom((t) => (
+            <SuccessToast
+              t={t}
+              title="Upload Complete"
+              message={`${file.name} has been safely stored.`}
+            />
+          ));
+          getDirectoryItems();
+        } else {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            toast.custom((t) => (
+              <ErrorToast
+                t={t}
+                title="Upload Failed"
+                message={response.message || "Server rejected the file."}
+              />
+            ));
+          } catch (e) {
+            toast.custom((t) => (
+              <ErrorToast
+                t={t}
+                title="Upload Failed"
+                message="An unexpected error occurred."
+              />
+            ));
+          }
+        }
+        setTimeout(() => {
+          setProgress(0);
+          if (inputRef.current) inputRef.current.value = "";
+        }, 500);
+      });
+
+      xhr.addEventListener("error", () => {
+        toast.dismiss(toastId);
+        toast.custom((t) => (
+          <ErrorToast
+            t={t}
+            title="Network Error"
+            message="Please check your internet connection."
+          />
+        ));
+        setProgress(0);
+      });
+
+      xhr.send(file);
+    } catch (error) {
+      if (toastId) toast.dismiss(toastId);
+      toast.custom((t) => (
+        <ErrorToast t={t} title="Error" message={error.message} />
+      ));
+      if (inputRef.current) inputRef.current.value = "";
     }
-}
+  }
 
   async function handleFileDelete(fileId) {
     try {
@@ -185,12 +216,7 @@ const DirectoryView = () => {
     }
   }
 
-  function renameFile(oldFilename) {
-    setRenamingFile(oldFilename);
-    setNewFilename(oldFilename);
-  }
-
-  async function saveFile(fileId) {
+  async function saveFile(fileId, newFilename) {
     try {
       const response = await fetch(`${BASE_URL}/file/${fileId}`, {
         method: "PATCH",
@@ -204,15 +230,13 @@ const DirectoryView = () => {
       });
 
       await response.json();
-      setRenamingFile(null);
-      setNewFilename("");
       getDirectoryItems();
     } catch (error) {
       console.error("Error renaming file:", error);
     }
   }
 
-  async function saveDirectory(directoryId) {
+  async function saveDirectory(directoryId, newDirName) {
     try {
       const response = await fetch(`${BASE_URL}/directory/${directoryId}`, {
         method: "PATCH",
@@ -220,12 +244,10 @@ const DirectoryView = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          newDirName: newFilename,
+          newDirName,
         }),
         credentials: "include",
       });
-      setRenamingFile(null);
-      setNewFilename("");
       getDirectoryItems();
     } catch (error) {
       console.error("Error renaming directory:", error);
@@ -255,11 +277,6 @@ const DirectoryView = () => {
       console.error("Error creating directory:", error);
     }
   }
-
-  const cancelRename = () => {
-    setRenamingFile(null);
-    setNewFilename("");
-  };
 
   if (error) {
     return (
@@ -301,7 +318,10 @@ const DirectoryView = () => {
         handleCreateDirectory={handleCreateDirectory}
       />
 
-      {/* Hidden file input */}
+      <div className="sticky top-16 z-30">
+        <Breadcrumbs path={currentPath} onNavigate={handleNavigate} />
+      </div>
+
       <input
         ref={inputRef}
         type="file"
@@ -309,7 +329,6 @@ const DirectoryView = () => {
         className="hidden"
       />
 
-      {/* Content Area */}
       <div className="px-6 py-6">
         {directoriesList.length === 0 && filesList.length === 0 ? (
           <div className="text-center py-12">
@@ -325,7 +344,6 @@ const DirectoryView = () => {
           </div>
         ) : (
           <>
-            {/* Directories */}
             {directoriesList.length > 0 && (
               <div className="mb-8">
                 <h2 className="text-lg font-medium text-gray-900 mb-4">
@@ -343,16 +361,8 @@ const DirectoryView = () => {
                       key={directory.id}
                       item={directory}
                       type="folder"
-                      isRenaming={renamingFile === directory.name}
-                      newName={newFilename}
-                      setNewName={setNewFilename}
-                      onRename={() => {
-                        setRenamingFile(directory.name);
-                        setNewFilename(directory.name);
-                      }}
-                      onSave={() => saveDirectory(directory.id)}
-                      onDelete={() => handleDirectoryDelete(directory.id)}
-                      onCancelRename={cancelRename}
+                      onRename={saveDirectory}
+                      onDelete={handleDirectoryDelete}
                       viewMode={viewMode}
                     />
                   ))}
@@ -360,7 +370,6 @@ const DirectoryView = () => {
               </div>
             )}
 
-            {/* Files */}
             {filesList.length > 0 && (
               <div>
                 <h2 className="text-lg font-medium text-gray-900 mb-4">
@@ -378,13 +387,8 @@ const DirectoryView = () => {
                       key={file.id}
                       item={file}
                       type="file"
-                      isRenaming={renamingFile === file.name}
-                      newName={newFilename}
-                      setNewName={setNewFilename}
-                      onRename={() => renameFile(file.name)}
-                      onSave={() => saveFile(file.id)}
-                      onDelete={() => handleFileDelete(file.id)}
-                      onCancelRename={cancelRename}
+                      onRename={saveFile}
+                      onDelete={handleFileDelete}
                       viewMode={viewMode}
                     />
                   ))}

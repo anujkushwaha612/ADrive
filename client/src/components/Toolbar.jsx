@@ -106,7 +106,7 @@ const Toolbar = ({
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               className="flex-1 bg-white border border-blue-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              autoFocus={isCreatingFolder}
+              autoFocus
               onKeyDown={(e) => e.key === 'Enter' && handleCreateDirectory()}
             />
             

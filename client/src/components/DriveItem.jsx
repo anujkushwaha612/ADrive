@@ -19,19 +19,17 @@ import { formatDate, renderFileSize } from "../utils/dateAndSize.js";
 const DriveItem = ({
   item,
   type, // "folder" | "file"
-  isRenaming,
-  newName,
-  setNewName,
-  onRename,
-  onSave,
+  onRename, // callback to save rename
   onDelete,
-  onCancelRename,
   viewMode, // "grid" | "list"
 }) => {
   const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
   const [showMenu, setShowMenu] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [localName, setLocalName] = useState(item.name);
   const menuRef = useRef(null);
+  const inputRef = useRef(null);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -51,6 +49,37 @@ const DriveItem = ({
   const handleMenuAction = (action) => {
     setShowMenu(false);
     action();
+  };
+
+  const startRename = () => {
+    setIsRenaming(true);
+    setLocalName(item.name);
+  };
+
+  const saveRename = async () => {
+    if (localName.trim() && localName !== item.name) {
+      await onRename(item.id, localName);
+    }
+    setIsRenaming(false);
+  };
+
+  const cancelRename = () => {
+    setIsRenaming(false);
+    setLocalName(item.name);
+  };
+
+  // Handle input change while preserving cursor position
+  const handleInputChange = (e) => {
+    const cursorPosition = e.target.selectionStart;
+    const value = e.target.value;
+    setLocalName(value);
+    
+    // Restore cursor position after state update
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        inputRef.current.setSelectionRange(cursorPosition, cursorPosition);
+      }
+    });
   };
 
   // --- RENDER: Details Modal ---
@@ -180,7 +209,7 @@ const DriveItem = ({
             )}
 
             <button
-              onClick={() => handleMenuAction(onRename)}
+              onClick={() => handleMenuAction(startRename)}
               className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
               <Edit2 className="w-4 h-4 mr-2" /> Rename
@@ -196,7 +225,7 @@ const DriveItem = ({
             <div className="border-t border-gray-100 my-1"></div>
 
             <button
-              onClick={() => handleMenuAction(onDelete)}
+              onClick={() => handleMenuAction(() => onDelete(item.id))}
               className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50"
             >
               <Trash2 className="w-4 h-4 mr-2" /> Delete
@@ -209,28 +238,28 @@ const DriveItem = ({
 
   // --- RENDER: Rename Input (Shared) ---
   const RenameInput = () => (
-    <div className="flex items-center gap-1 w-full">
+    <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
       <input
+        ref={inputRef}
         type="text"
-        value={newName}
-        onChange={(e) => setNewName(e.target.value)}
+        value={localName}
+        onChange={handleInputChange}
         className="w-full text-sm text-gray-900 border border-blue-400 bg-blue-50 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400"
         autoFocus
-        onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
-          if (e.key === "Enter") onSave();
-          if (e.key === "Escape") onCancelRename();
+          if (e.key === "Enter") saveRename();
+          if (e.key === "Escape") cancelRename();
         }}
       />
       <button
-        onClick={onSave}
-        className="p-1 text-green-600 hover:bg-green-100 rounded"
+        onClick={saveRename}
+        className="p-1 text-green-600 hover:bg-green-100 rounded flex-shrink-0"
       >
         <Check className="w-4 h-4" />
       </button>
       <button
-        onClick={onCancelRename}
-        className="p-1 text-red-500 hover:bg-red-100 rounded"
+        onClick={cancelRename}
+        className="p-1 text-red-500 hover:bg-red-100 rounded flex-shrink-0"
       >
         <X className="w-4 h-4" />
       </button>
@@ -251,24 +280,35 @@ const DriveItem = ({
 
           {/* Icon Area */}
           <div className="mb-4 flex-1 flex items-center justify-center w-full">
-            <Link
-              to={
-                type === "folder"
-                  ? `/directory/${item.id}`
-                  : `${BASE_URL}/file/${item.id}`
-              }
-              className="cursor-pointer"
-            >
-              {type === "folder" ? (
-                <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center group-hover:scale-105 transition-transform">
+            {!isRenaming && (
+              <Link
+                to={
+                  type === "folder"
+                    ? `/directory/${item.id}`
+                    : `${BASE_URL}/file/${item.id}`
+                }
+                className="cursor-pointer"
+              >
+                {type === "folder" ? (
+                  <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Folder className="w-8 h-8 text-blue-500" />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-2xl bg-green-50 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <File className="w-8 h-8 text-green-500" />
+                  </div>
+                )}
+              </Link>
+            )}
+            {isRenaming && (
+              <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center">
+                {type === "folder" ? (
                   <Folder className="w-8 h-8 text-blue-500" />
-                </div>
-              ) : (
-                <div className="w-16 h-16 rounded-2xl bg-green-50 flex items-center justify-center group-hover:scale-105 transition-transform">
+                ) : (
                   <File className="w-8 h-8 text-green-500" />
-                </div>
-              )}
-            </Link>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Name / Rename Area */}
@@ -279,7 +319,7 @@ const DriveItem = ({
               <div className="w-full">
                 <p
                   className="font-medium text-sm text-gray-700 truncate px-2"
-                   title={`Size: ${renderFileSize(item.size)}\nCreated On: ${item.createdAt}`}
+                  title={`Size: ${renderFileSize(item.size)}\nCreated On: ${item.createdAt}`}
                 >
                   {item.name}
                 </p>
@@ -331,7 +371,7 @@ const DriveItem = ({
                       : `${BASE_URL}/file/${item.id}`
                   }
                   className="font-medium text-gray-700 truncate hover:text-blue-600 block"
-                   title={`Size: ${renderFileSize(item.size)}\nCreated On: ${formatDate(item.createdAt)}`}
+                  title={`Size: ${renderFileSize(item.size)}\nCreated On: ${formatDate(item.createdAt)}`}
                 >
                   {item.name}
                 </Link>

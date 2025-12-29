@@ -2,6 +2,7 @@ import { rm } from "node:fs/promises";
 import Directory from "../models/directory.model.js";
 import File from "../models/file.model.js";
 import { handleFolderSizeUpdate } from "../utils/folderSize.utils.js";
+import mongoose from "mongoose";
 
 export const getDirectoryById = async (req, res, next) => {
   try {
@@ -43,7 +44,9 @@ export const createDirectory = async (req, res, next) => {
   try {
     const user = req.user;
     const parentDirId = req.params.parentDirId || user.rootDirId.toString();
+    const { dirname } = req.body;
 
+    // 1. Fetch the Parent Directory
     const parentDirData = await Directory.findOne({
       _id: parentDirId,
     }).lean();
@@ -54,15 +57,36 @@ export const createDirectory = async (req, res, next) => {
       });
     }
 
-    const { dirname } = req.body || "New Folder";
-    await Directory.insertOne({
-      name: dirname,
+    // 2. CALCULATE THE PATH (The Logic)
+    // The new folder's path is: [Grandparents...] + [Parent]
+
+    // Safety check: ensure parentPath exists, otherwise default to []
+    const parentPath = parentDirData.path || [];
+    const fileId = new mongoose.Types.ObjectId();
+
+    const newPath = [
+      ...parentPath,
+      {
+        _id: fileId,
+        name: dirname || "New Folder"
+      }
+    ];
+
+    // 3. Create the Directory with the path
+    // Note: Use .create() for Mongoose, .insertOne() is for raw MongoDB
+    const newDir = await Directory.insertOne({
+      _id: fileId,
+      name: dirname || "New Folder",
       parentDirId,
       userId: user._id,
+      path: newPath, // <--- Storing the full breadcrumb here
     });
+
     return res.status(201).json({
       message: "Directory created successfully",
+      directory: newDir
     });
+
   } catch (error) {
     console.log(error);
     next(error);
@@ -81,6 +105,19 @@ export const renameDirectory = async (req, res, next) => {
       },
       { $set: { name: newDirName } }
     );
+
+    await Directory.updateMany(
+      {
+        "path._id": id  // Find any directory that has this parent in its path
+      },
+      {
+        $set: {
+          "path.$.name": newDirName // <--- The '$' updates ONLY the matching array element
+        }
+      }
+    );
+
+
     res.status(200).json({ message: "Directory Renamed!" });
   } catch (error) {
     next(error);

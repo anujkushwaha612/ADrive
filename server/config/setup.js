@@ -16,9 +16,7 @@ try {
           '_id',
           'name',
           'email',
-          'maxStorage',
           'role',
-          'isLoggedIn',
           'rootDirId'
         ],
         properties: {
@@ -30,7 +28,7 @@ try {
             minLength: 3
           },
           maxStorage: {
-            bsonType: 'long',
+            bsonType: ["int", "long", "double"],
           },
           email: {
             bsonType: 'string',
@@ -46,9 +44,6 @@ try {
           },
           picture: {
             bsonType: 'string'
-          },
-          isLoggedIn: {
-            bsonType: 'bool'
           },
           rootDirId: {
             bsonType: 'objectId'
@@ -66,7 +61,8 @@ try {
     validator: {
       $jsonSchema: {
         bsonType: "object",
-        required: ["_id", "name", "size", "userId", "parentDirId", "createdAt", "updatedAt"],
+        // Added "path" to the required list
+        required: ["_id", "name", "size", "userId", "parentDirId", "createdAt", "updatedAt", "path"],
         properties: {
           _id: {
             bsonType: "objectId",
@@ -75,7 +71,9 @@ try {
             bsonType: "string",
           },
           size: {
-            bsonType: "int",
+            // Changed to allow int, long (for >2GB), or double (JS default) 
+            // to prevent validation errors on large files.
+            bsonType: ["int", "long", "double"],
           },
           userId: {
             bsonType: "objectId",
@@ -88,6 +86,23 @@ try {
           },
           updatedAt: {
             bsonType: "date",
+          },
+          // --- NEW FIELD: PATH ARRAY ---
+          path: {
+            bsonType: "array",
+            items: {
+              bsonType: "object",
+              required: ["_id", "name"],
+              properties: {
+                _id: {
+                  bsonType: "objectId",
+                },
+                name: {
+                  bsonType: "string",
+                },
+              },
+              additionalProperties: false, // Prevents extra junk data in path objects
+            },
           },
         },
         additionalProperties: false,
