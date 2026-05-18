@@ -137,6 +137,22 @@ try {
           parentDirId: {
             bsonType: "objectId",
           },
+          sharedWith: {
+            bsonType: "array",
+            items: {
+              bsonType: "object",
+              required: ["_id", "role"],
+              properties: {
+                _id: {
+                  bsonType: "objectId"
+                },
+                role: {
+                  bsonType: "string",
+                  enum: ["viewer", "editor"],
+                }
+              }
+            }
+          },
           createdAt: {
             bsonType: "date",
           },

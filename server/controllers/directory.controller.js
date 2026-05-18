@@ -21,6 +21,10 @@ export const getDirectoryById = async (req, res, next) => {
     }
     const files = await File.find({
       parentDirId: directoryData._id,
+    }).populate("userId", {
+      "picture" : 1,
+      email : 1,
+      _id : 0
     }).lean();
 
     const directories = await Directory.find({

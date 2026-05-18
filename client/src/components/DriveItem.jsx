@@ -13,13 +13,16 @@ import {
   ExternalLink,
   Clock,
   Calendar,
+  Share2,
 } from "lucide-react";
 import { formatDate, renderFileSize } from "../utils/dateAndSize.js";
+import ShareModal from "./ShareModal.jsx";
 
 const DriveItem = ({
   item,
   type, // "folder" | "file"
-  onRename, // callback to save rename
+  onRename,
+  user,
   onDelete,
   viewMode, // "grid" | "list"
 }) => {
@@ -28,13 +31,15 @@ const DriveItem = ({
   const [showDetails, setShowDetails] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [localName, setLocalName] = useState(item.name);
+  const [showShare, setShowShare] = useState(false);
+  const dropDownRef = useRef(null);
   const menuRef = useRef(null);
   const inputRef = useRef(null);
 
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+      if (dropDownRef.current && !dropDownRef.current.contains(event.target)) {
         setShowDetails(false);
       }
     };
@@ -45,6 +50,20 @@ const DriveItem = ({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showDetails]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showMenu]);
 
   const handleMenuAction = (action) => {
     setShowMenu(false);
@@ -73,7 +92,7 @@ const DriveItem = ({
     const cursorPosition = e.target.selectionStart;
     const value = e.target.value;
     setLocalName(value);
-    
+
     // Restore cursor position after state update
     requestAnimationFrame(() => {
       if (inputRef.current) {
@@ -88,7 +107,7 @@ const DriveItem = ({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
         <div
-          ref={menuRef}
+          ref={dropDownRef}
           className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
         >
           <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50">
@@ -160,6 +179,7 @@ const DriveItem = ({
     );
   };
 
+
   // --- RENDER: Kebab Menu (Dropdown) ---
   const KebabMenu = () => (
     <div className="relative">
@@ -179,7 +199,7 @@ const DriveItem = ({
       </button>
 
       {showMenu && (
-        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 origin-top-right">
+        <div ref={menuRef} className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 origin-top-right">
           <div className="py-1">
             {/* Open Action */}
             {type === "folder" ? (
@@ -214,6 +234,12 @@ const DriveItem = ({
             >
               <Edit2 className="w-4 h-4 mr-2" /> Rename
             </button>
+            <button
+              onClick={() => {setShowShare(true), setShowMenu(false)}}
+              className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <Share2 className="w-4 h-4 mr-2" /> Share
+            </button>
 
             <button
               onClick={() => handleMenuAction(() => setShowDetails(true))}
@@ -238,7 +264,10 @@ const DriveItem = ({
 
   // --- RENDER: Rename Input (Shared) ---
   const RenameInput = () => (
-    <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="flex items-center gap-1 w-full"
+      onClick={(e) => e.stopPropagation()}
+    >
       <input
         ref={inputRef}
         type="text"
@@ -266,7 +295,7 @@ const DriveItem = ({
     </div>
   );
 
-  // --- VIEW: Grid Mode ---
+ // --- VIEW: Grid Mode ---
   if (viewMode === "grid") {
     return (
       <>
@@ -319,7 +348,9 @@ const DriveItem = ({
               <div className="w-full">
                 <p
                   className="font-medium text-sm text-gray-700 truncate px-2"
-                  title={`Size: ${renderFileSize(item.size)}\nCreated On: ${item.createdAt}`}
+                  title={`Size: ${renderFileSize(item.size)}\nCreated On: ${
+                    item.createdAt
+                  }`}
                 >
                   {item.name}
                 </p>
@@ -362,8 +393,8 @@ const DriveItem = ({
             </div>
           ) : (
             <div className="flex-1 min-w-0 grid grid-cols-12 items-center gap-4">
-              {/* Name Column */}
-              <div className="col-span-6 sm:col-span-8">
+              {/* Name Column (Reduced col-span to fit avatar) */}
+              <div className="col-span-6 sm:col-span-6">
                 <Link
                   to={
                     type === "folder"
@@ -371,13 +402,31 @@ const DriveItem = ({
                       : `${BASE_URL}/file/${item.id}`
                   }
                   className="font-medium text-gray-700 truncate hover:text-blue-600 block"
-                  title={`Size: ${renderFileSize(item.size)}\nCreated On: ${formatDate(item.createdAt)}`}
+                  title={`Size: ${renderFileSize(
+                    item.size
+                  )}\nCreated On: ${formatDate(item.createdAt)}`}
                 >
                   {item.name}
                 </Link>
               </div>
 
-              {/* Metadata Columns (Hidden on small screens) */}
+              {/* --- NEW: Owner Column --- */}
+              <div className="hidden sm:flex col-span-2 items-center justify-start">
+                 {item.userId?.picture && (
+                  <div className="flex items-center gap-2">
+                    <img 
+                     src={item.userId.picture} 
+                     alt="Owner" 
+                     className="w-6 h-6 rounded-full object-cover border border-gray-200"
+                     title="Owner"
+                   />
+                   <p>{item.userId.email == user.email ? "--> me" : "<-- " + item.userId.email}</p>
+                  </div>
+                   
+                 )}
+              </div>
+
+              {/* Metadata Columns */}
               <div className="hidden sm:block col-span-2 text-xs text-gray-400 truncate">
                 {renderFileSize(item.size)}
               </div>
@@ -396,6 +445,7 @@ const DriveItem = ({
         )}
       </div>
       <DetailsModal />
+      <ShareModal fileId={item.id} show={showShare} onClose={() => setShowShare(false)} />
     </>
   );
 };

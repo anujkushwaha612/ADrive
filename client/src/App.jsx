@@ -5,6 +5,7 @@ import Login from "./auth/Login";
 import UnauthorizedPage from "./components/UnauthorizedPage";
 import AllUsers from "./admin/AllUsers";
 import { Toaster } from "./components/ui/sonner";
+import Dashboard from "./dashboard/Dashboard";
 
 const router = createBrowserRouter([
   {
@@ -26,6 +27,10 @@ const router = createBrowserRouter([
   {
     path: "/admin/users",
     element: <AllUsers />,
+  },
+  {
+    path: "/dashboard",
+    element: <Dashboard />,
   },
   {
     path: "/unauthorized",

@@ -8,6 +8,7 @@ import adminRoutes from "./routes/admin.route.js";
 import cookieParser from "cookie-parser";
 import checkAuth from "./middlewares/auth.middleware.js";
 import { connectDB } from "./config/db.js";
+import shareRoutes from "./routes/share.route.js";
 
 const mySecretKey = process.env.COOKIE_SECRET_KEY;
 const PORT = process.env.PORT
@@ -28,6 +29,7 @@ app.use("/file", checkAuth, fileRoutes);
 app.use("/user", userRoutes);
 app.use("/auth", authRoutes);
 app.use("/admin", adminRoutes);
+app.use("/share", shareRoutes);
 
 app.use((err, req, res, next) => {
   res.status(err.status || 500).json({

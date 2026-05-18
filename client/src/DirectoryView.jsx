@@ -22,6 +22,7 @@ const DirectoryView = () => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [directoryname, setDirectoryname] = useState("");
+  const [user, setUser] = useState(null);
   const [viewMode, setViewMode] = useState("list");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const inputRef = useRef(null);
@@ -304,7 +305,7 @@ const DirectoryView = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
+      <Header user={user} setUser={setUser} />
 
       <Toolbar
         onUploadClick={handleUploadClick}
@@ -361,6 +362,7 @@ const DirectoryView = () => {
                       key={directory.id}
                       item={directory}
                       type="folder"
+                      user={user}
                       onRename={saveDirectory}
                       onDelete={handleDirectoryDelete}
                       viewMode={viewMode}
@@ -387,6 +389,7 @@ const DirectoryView = () => {
                       key={file.id}
                       item={file}
                       type="file"
+                      user={user}
                       onRename={saveFile}
                       onDelete={handleFileDelete}
                       viewMode={viewMode}

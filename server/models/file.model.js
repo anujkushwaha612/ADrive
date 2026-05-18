@@ -23,6 +23,17 @@ const fileSchema = new Schema({
         ref: "User",
         required: true,
     },
+    sharedWith : [{
+        _id : {
+            type : Schema.Types.ObjectId,
+            ref : "User"
+        },
+        role : {
+            type : String,
+            enum : ["viewer", "editor"],
+            default : "viewer"
+        }
+    }]
 }, {
     strict: "throw",
     versionKey: false,
