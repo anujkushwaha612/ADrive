@@ -11,6 +11,7 @@ import {
   SuccessToast,
 } from "./components/ToastComponents";
 import Breadcrumbs from "./components/Breadcrumbs";
+import FileViewerOverlay from "./components/FileView";
 
 // Main Directory View Component
 const DirectoryView = () => {
@@ -25,8 +26,17 @@ const DirectoryView = () => {
   const [user, setUser] = useState(null);
   const [viewMode, setViewMode] = useState("list");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [selectedFileId, setSelectedFileId] = useState(null);
+  const [selectedFileName, setSelectedFileName] = useState("");
   const inputRef = useRef(null);
   const navigate = useNavigate();
+
+  const handleOpenViewer = (item) => {
+    setSelectedFileId(item.id);
+    setSelectedFileName(item.name || "");
+    setIsViewerOpen(true);
+  };
 
   const handleNavigate = (folderId) => {
     if (!folderId) {
@@ -82,114 +92,146 @@ const DirectoryView = () => {
     if (!file) return;
 
     let toastId;
-
     try {
-      // --- STEP 1: Handshake ---
-      const initResponse = await fetch(`${BASE_URL}/file/init-upload`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ filename: file.name, filesize: file.size }),
-      });
+        // 1. Initialize the upload and get the POST policy from your backend
+        const initResponse = await fetch(`${BASE_URL}/file/init-upload/${dirId || ""}`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            credentials: "include",
+            body: JSON.stringify({
+                filename: file.name,
+                filesize: file.size,
+                contentType: file.type || "application/octet-stream"
+            })
+        });
 
-      if (!initResponse.ok) {
-        const errorData = await initResponse.json();
-        toast.custom((t) => (
-          <ErrorToast
-            t={t}
-            title="Permission Denied"
-            message={errorData.error || "Upload denied"}
-          />
-        ));
-        return;
-      }
-
-      const { uploadToken } = await initResponse.json();
-
-      toastId = toast.custom(
-        () => (
-          <LoadingToast
-            message="Uploading File"
-            subMessage={`Sending ${file.name}...`}
-          />
-        ),
-        { duration: Infinity }
-      );
-
-      // --- STEP 2: Actual Upload ---
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", `${BASE_URL}/file/${dirId || ""}`, true);
-      xhr.setRequestHeader("x-upload-token", uploadToken);
-      xhr.setRequestHeader("filename", file.name);
-      xhr.setRequestHeader("filesize", file.size);
-      xhr.withCredentials = true;
-
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const totalProgress = (e.loaded / e.total) * 100;
-          setProgress(totalProgress.toFixed(2));
-        }
-      });
-
-      xhr.addEventListener("load", () => {
-        toast.dismiss(toastId);
-
-        if (xhr.status >= 200 && xhr.status < 300) {
-          toast.custom((t) => (
-            <SuccessToast
-              t={t}
-              title="Upload Complete"
-              message={`${file.name} has been safely stored.`}
-            />
-          ));
-          getDirectoryItems();
-        } else {
-          try {
-            const response = JSON.parse(xhr.responseText);
+        if (!initResponse.ok) {
+            const errorData = await initResponse.json();
             toast.custom((t) => (
-              <ErrorToast
-                t={t}
-                title="Upload Failed"
-                message={response.message || "Server rejected the file."}
-              />
+                <ErrorToast
+                    t={t}
+                    title="Permission Denied"
+                    message={errorData.error || "Upload denied"}
+                />
             ));
-          } catch (e) {
-            toast.custom((t) => (
-              <ErrorToast
-                t={t}
-                title="Upload Failed"
-                message="An unexpected error occurred."
-              />
-            ));
-          }
+            // Reset input so user can try again
+            if (inputRef.current) inputRef.current.value = "";
+            return;
         }
-        setTimeout(() => {
-          setProgress(0);
-          if (inputRef.current) inputRef.current.value = "";
-        }, 500);
-      });
 
-      xhr.addEventListener("error", () => {
-        toast.dismiss(toastId);
-        toast.custom((t) => (
-          <ErrorToast
-            t={t}
-            title="Network Error"
-            message="Please check your internet connection."
-          />
-        ));
-        setProgress(0);
-      });
+        // 2. Extract the new uploadFields alongside the URL and ID
+        const { uploadUrl, uploadFields, fileId } = await initResponse.json();
+        
+        toastId = toast.custom(
+            () => (
+                <LoadingToast
+                    message="Uploading File"
+                    subMessage={`Sending ${file.name}...`}
+                />
+            ),
+            { duration: Infinity }
+        );
 
-      xhr.send(file);
+        // 3. Configure the XHR request for POST
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", uploadUrl, true);
+        
+        // CRITICAL: Do NOT set "Content-Type" manually when sending FormData.
+        // The browser will automatically set it to 'multipart/form-data' with the correct boundary.
+        xhr.withCredentials = false;
+
+        // 4. Track Progress
+        xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) {
+                const totalProgress = (e.loaded / e.total) * 100;
+                setProgress(totalProgress.toFixed(2));
+            }
+        });
+
+        // 5. Handle Upload Completion
+        xhr.addEventListener("load", () => {
+            toast.dismiss(toastId);
+            
+            if (xhr.status >= 200 && xhr.status < 300) {
+                toast.custom((t) => (
+                    <SuccessToast
+                        t={t}
+                        title="Upload Complete"
+                        message={`${file.name} has been safely stored.`}
+                    />
+                ));
+
+                // Notify backend that AWS has the file safely
+                fetch(`${BASE_URL}/file/status/${fileId}`, {
+                    method: "PATCH",
+                    credentials: "include"
+                }).catch(err => console.error("Failed to update DB status", err));
+
+                getDirectoryItems();
+            } else {
+                // AWS rejected the file (e.g., size exceeded the POST policy limits)
+                toast.custom((t) => (
+                    <ErrorToast
+                        t={t}
+                        title="Upload Failed"
+                        message="Server rejected the file. It may be too large or an invalid format."
+                    />
+                ));
+
+                fetch(`${BASE_URL}/file/${fileId}`, {
+                    method: "DELETE",
+                    credentials: "include"
+                }).catch(err => console.error("Failed to delete file record", err));
+            }
+
+            setTimeout(() => {
+                setProgress(0);
+                if (inputRef.current) {
+                    inputRef.current.value = "";
+                }
+            }, 300);
+        });
+
+        // Handle severe network errors (e.g., wifi drops)
+        xhr.addEventListener("error", () => {
+            toast.dismiss(toastId);
+            toast.custom((t) => (
+                <ErrorToast t={t} title="Network Error" message="Upload interrupted. Please check your connection." />
+            ));
+            setProgress(0);
+            if (inputRef.current) inputRef.current.value = "";
+        });
+
+        // 6. Construct the Secure Payload
+        const formData = new FormData();
+        
+        // Append all AWS signature/policy fields FIRST
+        if (uploadFields) {
+            Object.entries(uploadFields).forEach(([key, value]) => {
+                formData.append(key, value);
+            });
+        }
+        
+        // Append the actual file LAST (AWS will reject if this is not the last field)
+        formData.append("file", file);
+
+        // 7. Send the FormData
+        xhr.send(formData);
+
     } catch (error) {
-      if (toastId) toast.dismiss(toastId);
-      toast.custom((t) => (
-        <ErrorToast t={t} title="Error" message={error.message} />
-      ));
-      if (inputRef.current) inputRef.current.value = "";
+        console.error("Upload process failed:", error);
+        if (toastId) toast.dismiss(toastId);
+        
+        toast.custom((t) => (
+            <ErrorToast t={t} title="System Error" message="An unexpected error occurred during upload." />
+        ));
+        
+        setProgress(0);
+        if (inputRef.current) inputRef.current.value = "";
     }
-  }
+}
 
   async function handleFileDelete(fileId) {
     try {
@@ -219,7 +261,7 @@ const DirectoryView = () => {
 
   async function saveFile(fileId, newFilename) {
     try {
-      const response = await fetch(`${BASE_URL}/file/${fileId}`, {
+      const response = await fetch(`${BASE_URL}/file/rename/${fileId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -392,6 +434,7 @@ const DirectoryView = () => {
                       user={user}
                       onRename={saveFile}
                       onDelete={handleFileDelete}
+                      onOpen={handleOpenViewer}
                       viewMode={viewMode}
                     />
                   ))}
@@ -401,6 +444,18 @@ const DirectoryView = () => {
           </>
         )}
       </div>
+
+      {isViewerOpen && (
+        <FileViewerOverlay
+          fileId={selectedFileId}
+          fileName={selectedFileName}
+          onClose={() => {
+            setIsViewerOpen(false);
+            setSelectedFileId(null);
+            setSelectedFileName("");
+          }}
+        />
+      )}
     </div>
   );
 };

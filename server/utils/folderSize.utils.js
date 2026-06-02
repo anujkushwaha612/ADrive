@@ -1,9 +1,14 @@
 import Directory from "../models/directory.model.js";
 
-export const handleFolderSizeUpdate = async (parentDirId, size) => {
+export const handleFolderSizeUpdate = async (parentDirId, size, session) => {
     const parents = [];
+    
+    // We add .session(session) to the find query
     while (parentDirId) {
-        const directory = await Directory.findById(parentDirId, "parentDirId").lean();
+        const directory = await Directory.findById(parentDirId, "parentDirId")
+            .session(session)
+            .lean();
+            
         if (!directory) {
             break;
         }
@@ -12,10 +17,11 @@ export const handleFolderSizeUpdate = async (parentDirId, size) => {
     }
 
     if (parents.length > 0) {
-        await Directory.updateMany({
-            _id: { $in: parents }
-        }, {
-            $inc: { size: size }
-        })
+        // We pass { session } in the options object for updateMany
+        await Directory.updateMany(
+            { _id: { $in: parents } }, 
+            { $inc: { size: size } },
+            { session } 
+        );
     }
 }

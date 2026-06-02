@@ -6,3 +6,6 @@ foldersDB.json
 filesDB.json
 usersDB.json
 .env
+interview_guide.md
+private_key.pem
+public_key.pem

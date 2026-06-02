@@ -23,6 +23,11 @@ const fileSchema = new Schema({
         ref: "User",
         required: true,
     },
+    uploadStatus : {
+        type : String,
+        enum : ["uploading", "completed", "failed"],
+        default : "uploading"
+    },
     sharedWith : [{
         _id : {
             type : Schema.Types.ObjectId,

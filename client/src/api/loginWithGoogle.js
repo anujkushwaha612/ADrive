@@ -4,7 +4,7 @@ export const loginWithGoogle = async (idToken) => {
         headers: {
             "Content-Type": "application/json",
         },
-        credentials : "include",
+        credentials: "include",
         body: JSON.stringify({ idToken }),
     });
     const data = await response.json();

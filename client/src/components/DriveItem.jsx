@@ -24,6 +24,7 @@ const DriveItem = ({
   onRename,
   user,
   onDelete,
+  onOpen,
   viewMode, // "grid" | "list"
 }) => {
   const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
@@ -210,22 +211,70 @@ const DriveItem = ({
                 <ExternalLink className="w-4 h-4 mr-2" /> Open
               </Link>
             ) : (
-              <Link
-                to={`${BASE_URL}/file/${item.id}`}
-                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  onOpen?.(item);
+                }}
+                className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
               >
                 <ExternalLink className="w-4 h-4 mr-2" /> Open
-              </Link>
+              </button>
             )}
 
             {/* Download (Files only) */}
             {type === "file" && (
-              <a
-                href={`${BASE_URL}/file/${item.id}?action=download`}
-                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              <button
+                onClick={async () => {
+                  setShowMenu(false);
+                  try {
+                    // Fetch the signed CloudFront URL from the API
+                    const response = await fetch(`${BASE_URL}/file/${item.id}`, {
+                      credentials: "include",
+                    });
+                    if (!response.ok) throw new Error("Failed to get download URL");
+                    const data = await response.json();
+                    const url = data.cloudFrontUrl || data.fileUrl || data.url || "";
+                    if (!url) throw new Error("No download URL available");
+
+                    const downloadName = item.name || "download";
+                    const SIZE_THRESHOLD = 100 * 1024 * 1024; // 100 MB
+
+                    // Large files: let the browser stream directly to disk
+                    if ((data.size || item.size || 0) > SIZE_THRESHOLD) {
+                      const link = document.createElement("a");
+                      link.href = url;
+                      link.download = downloadName;
+                      link.rel = "noopener noreferrer";
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      return;
+                    }
+
+                    // Standard files: secure Blob method with proper cleanup
+                    const fileResponse = await fetch(url);
+                    if (!fileResponse.ok) throw new Error("Download failed");
+
+                    const blob = await fileResponse.blob();
+                    const blobUrl = window.URL.createObjectURL(blob);
+
+                    const link = document.createElement("a");
+                    link.href = blobUrl;
+                    link.download = downloadName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    window.URL.revokeObjectURL(blobUrl);
+                  } catch (err) {
+                    console.error("Download failed:", err);
+                  }
+                }}
+                className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
               >
                 <Download className="w-4 h-4 mr-2" /> Download
-              </a>
+              </button>
             )}
 
             <button
@@ -309,25 +358,26 @@ const DriveItem = ({
 
           {/* Icon Area */}
           <div className="mb-4 flex-1 flex items-center justify-center w-full">
-            {!isRenaming && (
+            {!isRenaming && type === "folder" && (
               <Link
-                to={
-                  type === "folder"
-                    ? `/directory/${item.id}`
-                    : `${BASE_URL}/file/${item.id}`
-                }
+                to={`/directory/${item.id}`}
                 className="cursor-pointer"
               >
-                {type === "folder" ? (
-                  <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <Folder className="w-8 h-8 text-blue-500" />
-                  </div>
-                ) : (
-                  <div className="w-16 h-16 rounded-2xl bg-green-50 flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <File className="w-8 h-8 text-green-500" />
-                  </div>
-                )}
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Folder className="w-8 h-8 text-blue-500" />
+                </div>
               </Link>
+            )}
+            {!isRenaming && type === "file" && (
+              <button
+                type="button"
+                onClick={() => onOpen?.(item)}
+                className="cursor-pointer"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-green-50 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <File className="w-8 h-8 text-green-500" />
+                </div>
+              </button>
             )}
             {isRenaming && (
               <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center">
@@ -395,19 +445,24 @@ const DriveItem = ({
             <div className="flex-1 min-w-0 grid grid-cols-12 items-center gap-4">
               {/* Name Column (Reduced col-span to fit avatar) */}
               <div className="col-span-6 sm:col-span-6">
-                <Link
-                  to={
-                    type === "folder"
-                      ? `/directory/${item.id}`
-                      : `${BASE_URL}/file/${item.id}`
-                  }
-                  className="font-medium text-gray-700 truncate hover:text-blue-600 block"
-                  title={`Size: ${renderFileSize(
-                    item.size
-                  )}\nCreated On: ${formatDate(item.createdAt)}`}
-                >
-                  {item.name}
-                </Link>
+                {type === "folder" ? (
+                  <Link
+                    to={`/directory/${item.id}`}
+                    className="block truncate font-medium text-gray-700 hover:text-blue-600"
+                    title={`Size: ${renderFileSize(item.size)}\nCreated On: ${formatDate(item.createdAt)}`}
+                  >
+                    {item.name}
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onOpen?.(item)}
+                    className="block w-full truncate text-left font-medium text-gray-700 hover:text-blue-600"
+                    title={`Size: ${renderFileSize(item.size)}\nCreated On: ${formatDate(item.createdAt)}`}
+                  >
+                    {item.name}
+                  </button>
+                )}
               </div>
 
               {/* --- NEW: Owner Column --- */}
@@ -415,7 +470,7 @@ const DriveItem = ({
                  {item.userId?.picture && (
                   <div className="flex items-center gap-2">
                     <img 
-                     src={item.userId.picture} 
+                    //  src={item.userId.picture} 
                      alt="Owner" 
                      className="w-6 h-6 rounded-full object-cover border border-gray-200"
                      title="Owner"

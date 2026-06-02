@@ -117,7 +117,7 @@ try {
     validator: {
       $jsonSchema: {
         bsonType: "object",
-        required: ["_id", "extension", "size", "name", "userId", "parentDirId", "createdAt", "updatedAt"],
+        required: ["_id", "extension", "size", "name", "userId", "parentDirId", "createdAt", "updatedAt", "uploadStatus"],
         properties: {
           _id: {
             bsonType: "objectId",
@@ -136,6 +136,10 @@ try {
           },
           parentDirId: {
             bsonType: "objectId",
+          },
+          uploadStatus: {
+            bsonType: "string",
+            enum: ["uploading", "uploaded", "failed"],
           },
           sharedWith: {
             bsonType: "array",

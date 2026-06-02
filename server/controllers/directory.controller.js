@@ -1,7 +1,8 @@
-import { rm } from "node:fs/promises";
 import Directory from "../models/directory.model.js";
 import File from "../models/file.model.js";
 import { handleFolderSizeUpdate } from "../utils/folderSize.utils.js";
+import { DeleteObjectsCommand } from "@aws-sdk/client-s3";
+import s3 from "../config/s3.config.js";
 import mongoose from "mongoose";
 
 export const getDirectoryById = async (req, res, next) => {
@@ -13,24 +14,27 @@ export const getDirectoryById = async (req, res, next) => {
       _id,
       userId: user._id,
     }).lean();
+    
     if (!directoryData) {
       return res.status(404).json({
-        message:
-          "Directory not found or you dont have access to this directory",
+        message: "Directory not found or you don't have access to this directory",
       });
     }
-    const files = await File.find({
-      parentDirId: directoryData._id,
-    }).populate("userId", {
-      "picture" : 1,
-      email : 1,
-      _id : 0
-    }).lean();
 
-    const directories = await Directory.find({
-      parentDirId: _id,
-      userId: user._id,
-    }).lean();
+    // OPTIMIZATION: Run independent queries concurrently
+    const [files, directories] = await Promise.all([
+      File.find({ 
+        parentDirId: directoryData._id,
+        userId: user._id // Added for stricter security
+      })
+      .populate("userId", { picture: 1, email: 1, _id: 0 })
+      .lean(),
+      
+      Directory.find({
+        parentDirId: _id,
+        userId: user._id,
+      }).lean()
+    ]);
 
     return res.status(200).json({
       ...directoryData,
@@ -38,7 +42,7 @@ export const getDirectoryById = async (req, res, next) => {
       directories: directories.map((dir) => ({ ...dir, id: dir._id })),
     });
   } catch (error) {
-    console.log(error);
+    console.error("Get Directory Error:", error);
     error.message = "Failed to get the directory";
     next(error);
   }
@@ -48,9 +52,10 @@ export const createDirectory = async (req, res, next) => {
   try {
     const user = req.user;
     const parentDirId = req.params.parentDirId || user.rootDirId.toString();
-    const { dirname } = req.body;
+    
+    // Clean the input to prevent empty-space folder names
+    const dirname = req.body.dirname?.trim() || "New Folder";
 
-    // 1. Fetch the Parent Directory
     const parentDirData = await Directory.findOne({
       _id: parentDirId,
     }).lean();
@@ -61,10 +66,6 @@ export const createDirectory = async (req, res, next) => {
       });
     }
 
-    // 2. CALCULATE THE PATH (The Logic)
-    // The new folder's path is: [Grandparents...] + [Parent]
-
-    // Safety check: ensure parentPath exists, otherwise default to []
     const parentPath = parentDirData.path || [];
     const fileId = new mongoose.Types.ObjectId();
 
@@ -72,18 +73,17 @@ export const createDirectory = async (req, res, next) => {
       ...parentPath,
       {
         _id: fileId,
-        name: dirname || "New Folder"
+        name: dirname 
       }
     ];
 
-    // 3. Create the Directory with the path
-    // Note: Use .create() for Mongoose, .insertOne() is for raw MongoDB
-    const newDir = await Directory.insertOne({
+    // FIX: Changed insertOne() to create() for Mongoose compatibility
+    const newDir = await Directory.create({
       _id: fileId,
-      name: dirname || "New Folder",
+      name: dirname,
       parentDirId,
       userId: user._id,
-      path: newPath, // <--- Storing the full breadcrumb here
+      path: newPath, 
     });
 
     return res.status(201).json({
@@ -92,7 +92,7 @@ export const createDirectory = async (req, res, next) => {
     });
 
   } catch (error) {
-    console.log(error);
+    console.error("Create Directory Error:", error);
     next(error);
   }
 };
@@ -101,76 +101,132 @@ export const renameDirectory = async (req, res, next) => {
   try {
     const user = req.user;
     const { id } = req.params;
-    const { newDirName } = req.body;
-    await Directory.updateOne(
-      {
-        _id: id,
-        userId: user._id,
-      },
-      { $set: { name: newDirName } }
-    );
+    const newDirName = req.body.newDirName?.trim();
 
-    await Directory.updateMany(
-      {
-        "path._id": id  // Find any directory that has this parent in its path
-      },
-      {
-        $set: {
-          "path.$.name": newDirName // <--- The '$' updates ONLY the matching array element
-        }
-      }
-    );
+    if (!newDirName) {
+        return res.status(400).json({ message: "Directory name cannot be empty" });
+    }
 
+    // OPTIMIZATION: Run both updates concurrently
+    await Promise.all([
+      // 1. Update the actual directory's root name
+      Directory.updateOne(
+        { _id: id, userId: user._id },
+        { $set: { name: newDirName } }
+      ),
+      
+      // 2. Update the name inside the path array for this directory AND all its descendants
+      Directory.updateMany(
+        { "path._id": id },
+        { $set: { "path.$.name": newDirName } }
+      )
+    ]);
 
     res.status(200).json({ message: "Directory Renamed!" });
   } catch (error) {
+    console.error("Rename Directory Error:", error);
     next(error);
   }
 };
+
 
 export const deleteDirectory = async (req, res, next) => {
-  try {
-    const { id } = req.params;
+    const session = await mongoose.startSession();
 
-    const directory = await Directory.findOne({ _id: id, userId: req.user._id });
-    if (!directory) {
-      return res.status(404).json({ message: "Directory not found" });
+    try {
+        const { id } = req.params;
+        const user = req.user;
+
+        // 1. Verify ownership of the root directory being deleted
+        const directory = await Directory.findOne({ _id: id, userId: user._id }).lean();
+        if (!directory) {
+            return res.status(404).json({ message: "Directory not found" });
+        }
+
+        // 2. Gather all nested data
+        const collections = { dirIds: [], fileIds: [], s3Keys: [] };
+        await collectDescendants(id, user._id, collections);
+
+        // 3. DELETE FROM S3 FIRST (Outside the transaction)
+        // S3 allows deleting up to 1000 objects in a single batch request.
+        if (collections.s3Keys.length > 0) {
+            const chunkSize = 1000;
+            for (let i = 0; i < collections.s3Keys.length; i += chunkSize) {
+                const chunk = collections.s3Keys.slice(i, i + chunkSize);
+                
+                const command = new DeleteObjectsCommand({
+                    Bucket: process.env.AWS_BUCKET_NAME,
+                    Delete: {
+                        Objects: chunk, // Format must be: [{ Key: "id1.png" }, { Key: "id2.pdf" }]
+                        Quiet: true     // Reduces AWS response payload size
+                    }
+                });
+                await s3.send(command);
+            }
+        }
+
+        // ==========================================
+        // 4. START THE DATABASE TRANSACTION
+        // ==========================================
+        session.startTransaction();
+
+        // Bulk delete all files in one query
+        if (collections.fileIds.length > 0) {
+            await File.deleteMany({ _id: { $in: collections.fileIds } }, { session });
+        }
+
+        // Bulk delete all directories in one query
+        await Directory.deleteMany({ _id: { $in: collections.dirIds } }, { session });
+
+        // Update the parent folder size
+        await handleFolderSizeUpdate(directory.parentDirId, -directory.size, session);
+
+        await session.commitTransaction();
+        // ==========================================
+
+        return res.status(200).json({
+            message: "Directory and all nested contents deleted successfully",
+        });
+
+    } catch (error) {
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
+        console.error("Delete Directory Error:", error);
+        error.status = 500;
+        error.message = "Failed to delete the directory";
+        next(error);
+    } finally {
+        session.endSession();
     }
-
-    await deleteFolderRecursively(id);
-
-    handleFolderSizeUpdate(directory.parentDirId, -directory.size);
-
-    return res.status(200).json({
-      message: "Directory and all nested contents deleted successfully",
-    });
-  } catch (error) {
-    next(error);
-  }
 };
 
-const deleteFolderRecursively = async (directoryId) => {
-  const files = await File.find({ parentDirId: directoryId }).lean();
+/**
+ * Helper Function: Recursively collects all IDs instead of deleting them one by one.
+ */
+const collectDescendants = async (directoryId, userId, collections) => {
+    // Add current directory to the deletion list
+    collections.dirIds.push(directoryId);
 
-  await Promise.all(
-    files.map(async (file) => {
-      const filePath = `./storage/${file._id}${file.extension}`;
-      try {
-        await rm(filePath, { force: true });
-      } catch (err) {
-        console.error(`Failed to delete physical file: ${filePath}`, err);
-      }
-      await File.deleteOne({ _id: file._id });
-    })
-  );
+    // 1. Find and collect all files in this directory
+    const files = await File.find(
+        { parentDirId: directoryId, userId }, 
+        { _id: 1, extension: 1 } // Only fetch what we need to save RAM
+    ).lean();
 
-  const subDirectories = await Directory.find({ parentDirId: directoryId }).lean();
+    for (const file of files) {
+        collections.fileIds.push(file._id);
+        // Format the S3 key exactly how DeleteObjectsCommand expects it
+        collections.s3Keys.push({ Key: file._id.toString() + file.extension });
+    }
 
-  await Promise.all(
-    subDirectories.map(async (dir) => {
-      await deleteFolderRecursively(dir._id);
-    })
-  );
+    // 2. Find all subdirectories and recursively dive into them
+    const subDirectories = await Directory.find(
+        { parentDirId: directoryId, userId }, 
+        { _id: 1 }
+    ).lean();
 
-  await Directory.deleteOne({ _id: directoryId });
+    for (const dir of subDirectories) {
+        await collectDescendants(dir._id, userId, collections);
+    }
 };
